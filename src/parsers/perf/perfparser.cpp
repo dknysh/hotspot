@@ -1207,6 +1207,10 @@ public:
             auto args = features.cmdline;
             args.removeFirst();
             summaryResult.command = QLatin1String("perf ") + QString::fromUtf8(args.join(' '));
+            int unwindMethodIndex = args.indexOf(QByteArray("--call-graph"));
+            if (unwindMethodIndex != -1 && unwindMethodIndex < args.size() - 1) {
+                disassemblyResult.unwindMethod = QString::fromUtf8(args.at(unwindMethodIndex + 1));
+            }
         }
         summaryResult.hostName = QString::fromUtf8(features.hostName);
         summaryResult.linuxKernelVersion = QString::fromUtf8(features.osRelease);
@@ -1334,7 +1338,8 @@ PerfParser::~PerfParser() = default;
 
 void PerfParser::startParseFile(const QString& path, const QString& sysroot, const QString& kallsyms,
                                 const QString& debugPaths, const QString& extraLibPaths, const QString& appPath,
-                                const QString& arch, const QString& disasmApproach, const QString& verbose)
+                                const QString& arch, const QString& disasmApproach, const QString& verbose,
+                                const QString& maxStack, const QString& branchTraverse)
 {
     Q_ASSERT(!m_isParsing);
 
@@ -1383,13 +1388,19 @@ void PerfParser::startParseFile(const QString& path, const QString& sysroot, con
     if (!verbose.isEmpty()) {
         parserArgs += {QStringLiteral("--verbose"), verbose};
     }
+    if (!maxStack.isEmpty()) {
+        parserArgs += {QStringLiteral("--max-stack"), maxStack};
+    }
+    if (!branchTraverse.isEmpty()) {
+        parserArgs += {QStringLiteral("--branch-traverse")};
+    }
 
     // reset the data to ensure filtering will pick up the new data
     m_bottomUpResults = {};
     m_callerCalleeResults = {};
     m_events = {};
     m_disassemblyResult = {};
-    m_disassemblyResult.setData(path, appPath, extraLibPaths, arch, disasmApproach);
+    m_disassemblyResult.setData(path, appPath, extraLibPaths, arch, disasmApproach, !branchTraverse.isEmpty());
 
     emit parsingStarted();
     using namespace ThreadWeaver;
