@@ -75,12 +75,18 @@ public slots:
     void onJumpToDisassembly();
     void setData(const Data::Symbol& data);
     void setData(const Data::DisassemblyResult& data);
+    void clearTmpFiles();
+
+    // Methods to filter Disassembly output
+    void filterDisassemblyBytes(bool filtered);
+    void filterDisassemblyAddress(bool filtered);
+    // Method to change assembly syntax
+    void switchOnIntelSyntax(bool intelSyntax);
 
 signals:
-    void navigateToCode(const QString& url, int lineNumber, int columnNumber);
-
+    void navigateToCode(const QString &url, int lineNumber, int columnNumber);
 private:
-    bool eventFilter(QObject* watched, QEvent* event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
     void repositionFilterBusyIndicator();
 
     QScopedPointer<Ui::ResultsPage> ui;

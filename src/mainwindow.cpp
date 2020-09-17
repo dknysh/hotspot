@@ -174,28 +174,8 @@ MainWindow::MainWindow(QWidget* parent)
         });
     }
 
-    auto *showTimelineAction = ui->viewMenu->addAction(tr("Show Timeline"));
-    showTimelineAction->setCheckable(true);
-    showTimelineAction->setChecked(true);
-    showTimelineAction->setShortcut(tr("Ctrl+T"));
-    connect(showTimelineAction, &QAction::toggled, m_resultsPage, &ResultsPage::setTimelineVisible);
-
-    auto* prettifySymbolsAction = ui->viewMenu->addAction(tr("Prettify Symbols"));
-    prettifySymbolsAction->setCheckable(true);
-    prettifySymbolsAction->setChecked(Settings::instance()->prettifySymbols());
-    prettifySymbolsAction->setToolTip(
-        tr("Replace fully qualified and expanded STL type names with their shorter and more commonly used equivalents. "
-           "E.g. show std::string instead of std::basic_string<char, ...>"));
-    connect(prettifySymbolsAction, &QAction::toggled, Settings::instance(), &Settings::setPrettifySymbols);
-
-    ui->viewMenu->addSeparator();
-
-    QList<QAction *> actions = m_resultsPage->filterMenu()->actions();
-    // Disassembly menu items should not be presented here
-    actions.removeFirst();
-    ui->viewMenu->addActions(actions);
-    ui->viewMenu->addSeparator();
-    ui->viewMenu->addMenu(m_resultsPage->exportMenu());
+    setupFilterDisassemblyMenu();
+    setupViewMenu();
 
     setupCodeNavigationMenu();
     setupPathSettingsMenu();
@@ -205,6 +185,9 @@ MainWindow::MainWindow(QWidget* parent)
     auto config = m_config->group("Window");
     restoreGeometry(config.readEntry("geometry", QByteArray()));
     restoreState(config.readEntry("state", QByteArray()));
+
+    // Initially set on the Override app path with perf data path option
+    m_overrideAppPathWithPerfDataPath = true;
 }
 
 MainWindow::~MainWindow() = default;
@@ -216,6 +199,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
     config.writeEntry("state", saveState());
 
     m_parser->stop();
+    m_resultsPage->clearTmpFiles();
     QMainWindow::closeEvent(event);
 }
 
@@ -247,6 +231,18 @@ void MainWindow::setAppPath(const QString& path)
 {
     m_appPath = path;
     emit appPathChanged(m_appPath);
+}
+
+void MainWindow::setPerfDataPath(const QString& path) {
+    m_perfDataPath = path;
+}
+
+void MainWindow::setOverrideAppPathWithPerfDataPath(bool b) {
+    m_overrideAppPathWithPerfDataPath = b;
+}
+
+void MainWindow::setTargetRoot(const QString& path) {
+    m_targetRoot = path;
 }
 
 void MainWindow::setArch(const QString& arch)
@@ -283,6 +279,18 @@ QString MainWindow::getApplicationPath() const {
     return m_appPath;
 }
 
+QString MainWindow::getPerfDataPath() const {
+    return m_perfDataPath;
+}
+
+bool MainWindow::getOverrideAppPathWithPerfDataPath() const {
+    return m_overrideAppPathWithPerfDataPath;
+}
+
+QString MainWindow::getTargetRoot() const {
+    return m_targetRoot;
+}
+
 QString MainWindow::getExtraLibPaths() const {
     return m_extraLibPaths;
 }
@@ -306,6 +314,13 @@ void MainWindow::onOpenFileButtonClicked()
     if (fileName.isEmpty()) {
         return;
     }
+
+    // Save chosen perf data path to use in Settings Dialog
+    QFileInfo file(fileName);
+    m_perfDataPath = file.path();
+    // If override app path with perf data path is switched on, override app path with perf data path
+    if (m_overrideAppPathWithPerfDataPath)
+        setAppPath(m_perfDataPath);
 
     openFile(fileName);
 }
@@ -359,8 +374,8 @@ void MainWindow::openFile(const QString& path, bool isReload)
     m_pageStack->setCurrentWidget(m_startPage);
 
     // TODO: support input files of different types via plugins
-    m_parser->startParseFile(path, m_sysroot, m_kallsyms, m_debugPaths, m_extraLibPaths, m_appPath, m_arch,
-                             m_disasmApproach, m_verbose, m_maxStack, m_branchTraverse);
+    m_parser->startParseFile(path, m_sysroot, m_kallsyms, m_debugPaths, m_extraLibPaths, m_appPath, m_targetRoot,
+                             m_arch, m_disasmApproach, m_verbose, m_maxStack, m_branchTraverse);
     m_reloadAction->setEnabled(true);
     m_reloadAction->setData(path);
 
@@ -473,11 +488,59 @@ void MainWindow::setupPathSettingsMenu()
     m_startPage->setPathSettingsMenu(menu);
 }
 
-void MainWindow::setupCodeNavigationMenu()
-{
+void MainWindow::setupFilterDisassemblyMenu() {
+    QMenu *filterDisassemblyMenu = new QMenu(tr("Filter Disassembly View"));
+
+    auto *showFilteredDisassemblyBytesAction = filterDisassemblyMenu->addAction(tr("Hide/Show instruction bytes"));
+    showFilteredDisassemblyBytesAction->setCheckable(true);
+    showFilteredDisassemblyBytesAction->setChecked(true);
+    showFilteredDisassemblyBytesAction->setShortcut(tr("Ctrl+B"));
+    connect(showFilteredDisassemblyBytesAction, &QAction::toggled, m_resultsPage, &ResultsPage::filterDisassemblyBytes);
+
+    auto *showFilteredDisassemblyAddressAction = filterDisassemblyMenu->addAction(tr("Hide/Show instruction address"));
+    showFilteredDisassemblyAddressAction->setCheckable(true);
+    showFilteredDisassemblyAddressAction->setChecked(false);
+    showFilteredDisassemblyAddressAction->setShortcut(tr("Ctrl+J"));
+    connect(showFilteredDisassemblyAddressAction, &QAction::toggled, m_resultsPage,
+            &ResultsPage::filterDisassemblyAddress);
+    ui->viewMenu->addMenu(filterDisassemblyMenu);
+}
+
+void MainWindow::setupViewMenu() {
+    auto *switchDisassemblySyntaxAction = ui->viewMenu->addAction(tr("Assembly in Intel Syntax"));
+    switchDisassemblySyntaxAction->setCheckable(true);
+    switchDisassemblySyntaxAction->setChecked(false);
+    switchDisassemblySyntaxAction->setShortcut(tr("Ctrl+I"));
+    connect(switchDisassemblySyntaxAction, &QAction::toggled, m_resultsPage, &ResultsPage::switchOnIntelSyntax);
+
+    auto *showTimelineAction = ui->viewMenu->addAction(tr("Show Timeline"));
+    showTimelineAction->setCheckable(true);
+    showTimelineAction->setChecked(true);
+    showTimelineAction->setShortcut(tr("Ctrl+T"));
+    connect(showTimelineAction, &QAction::toggled, m_resultsPage, &ResultsPage::setTimelineVisible);
+
+    auto *prettifySymbolsAction = ui->viewMenu->addAction(tr("Prettify Symbols"));
+    prettifySymbolsAction->setCheckable(true);
+    prettifySymbolsAction->setChecked(Settings::instance()->prettifySymbols());
+    prettifySymbolsAction->setToolTip(
+            tr("Replace fully qualified and expanded STL type names with their shorter and more commonly used equivalents. "
+               "E.g. show std::string instead of std::basic_string<char, ...>"));
+    connect(prettifySymbolsAction, &QAction::toggled, Settings::instance(), &Settings::setPrettifySymbols);
+
+    ui->viewMenu->addSeparator();
+
+    QList<QAction *> actions = m_resultsPage->filterMenu()->actions();
+    // Disassembly menu item should not be presented here
+    actions.removeFirst();
+    ui->viewMenu->addActions(actions);
+    ui->viewMenu->addSeparator();
+    ui->viewMenu->addMenu(m_resultsPage->exportMenu());
+}
+
+void MainWindow::setupCodeNavigationMenu() {
     // Code Navigation
-    QAction* configAction =
-        new QAction(QIcon::fromTheme(QStringLiteral("applications-development")), tr("Code Navigation"), this);
+    QAction *configAction =
+            new QAction(QIcon::fromTheme(QStringLiteral("applications-development")), tr("Code Navigation"), this);
     auto menu = new QMenu(this);
     auto group = new QActionGroup(this);
     group->setExclusive(true);
