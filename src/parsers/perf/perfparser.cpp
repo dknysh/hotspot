@@ -185,6 +185,7 @@ QDebug operator<<(QDebug stream, const ThreadEnd& threadEnd)
 struct Location
 {
     quint64 address = 0;
+    quint64 relAddr = 0;
     StringId file;
     quint32 pid = 0;
     qint32 line = 0;
@@ -194,7 +195,7 @@ struct Location
 
 QDataStream& operator>>(QDataStream& stream, Location& location)
 {
-    return stream >> location.address >> location.file >> location.pid >> location.line >> location.column
+    return stream >> location.address >> location.relAddr >> location.file >> location.pid >> location.line >> location.column
         >> location.parentLocationId;
 }
 
@@ -202,6 +203,7 @@ QDebug operator<<(QDebug stream, const Location& location)
 {
     stream.noquote().nospace() << "Location{"
                                << "address=0x" << hex << location.address << dec << ", "
+                               << "relAddr=" << location.relAddr << ", "
                                << "file=" << location.file << ", "
                                << "pid=" << location.pid << ", "
                                << "line=" << location.line << ", "
@@ -299,19 +301,21 @@ QDebug operator<<(QDebug stream, const SampleCost& sampleCost)
 struct Sample : Record
 {
     QVector<qint32> frames;
+    QVector<qint32> disasmFrames;
     quint8 guessedFrames = 0;
     QVector<SampleCost> costs;
 };
 
 QDataStream& operator>>(QDataStream& stream, Sample& sample)
 {
-    return stream >> static_cast<Record&>(sample) >> sample.frames >> sample.guessedFrames >> sample.costs;
+    return stream >> static_cast<Record&>(sample) >> sample.frames >> sample.disasmFrames >> sample.guessedFrames >> sample.costs;
 }
 
 QDebug operator<<(QDebug stream, const Sample& sample)
 {
     stream.noquote().nospace() << "Sample{" << static_cast<const Record&>(sample) << ", "
                                << "frames=" << sample.frames << ", "
+                               << "disasmFrames=" << sample.disasmFrames << ", "
                                << "guessedFrames=" << sample.guessedFrames << ", "
                                << "costs=" << sample.costs << "}";
     return stream;
@@ -545,8 +549,8 @@ void addCallerCalleeEvent(const Data::Symbol& symbol, const Data::Location& loca
 {
     auto recursionIt = recursionGuard->find(symbol);
     if (recursionIt == recursionGuard->end()) {
-        auto& entry = callerCalleeResult->entry(symbol);
-        auto& locationCost = entry.source(location.location, numCosts);
+        auto &entry = callerCalleeResult->entry(symbol);
+        auto &locationCost = entry.source(location.location, numCosts);
 
         locationCost.inclusiveCost[type] += cost;
         if (recursionGuard->isEmpty()) {
@@ -561,6 +565,33 @@ struct SymbolCount {
     qint32 total = 0;
     qint32 missing = 0;
 };
+
+/**
+ * Calculate and set event cost value for location detailed to assembly instructions
+ * @param symbol
+ * @param location
+ * @param type
+ * @param cost
+ * @param recursionGuard
+ * @param disassemblyResult
+ * @param numCosts
+ */
+    void addDisassemblyEvent(const Data::Symbol &symbol, const Data::Location &location, int type, quint64 cost,
+                             QSet<Data::Symbol> *recursionGuard, Data::DisassemblyResult *disassemblyResult,
+                             int numCosts)
+    {
+        auto recursionIt = recursionGuard->find(symbol);
+        if (recursionIt == recursionGuard->end()) {
+            auto &entry = disassemblyResult->entry(symbol);
+            auto &locationCost = entry.source(location, numCosts);
+            if (recursionGuard->isEmpty()) {
+                // increment self cost for leaf
+                locationCost.selfCost[type] += cost;
+            }
+            recursionGuard->insert(symbol);
+        }
+    }
+
 }
 
 Q_DECLARE_TYPEINFO(AttributesDefinition, Q_MOVABLE_TYPE);
@@ -934,7 +965,7 @@ public:
             }
         }
         bottomUpResult.locations.push_back(
-            {location.location.parentLocationId, {location.location.address, locationString}});
+            {location.location.parentLocationId, {location.location.address, location.location.relAddr, locationString}});
         bottomUpResult.symbols.push_back({});
     }
 
@@ -1019,7 +1050,7 @@ public:
                               << strings.value(attributes.value(sampleCost.attributeId).name.id) << '\n';
         }
 
-        QSet<Data::Symbol> recursionGuard;
+        QSet<Data::Symbol> recursionGuard, recursionDisasmGuard;
         const auto type = attributeIdsToCostIds.value(sampleCost.attributeId, -1);
 
         if (type < 0) {
@@ -1028,11 +1059,21 @@ public:
             return;
         }
 
-        auto frameCallback = [this, &recursionGuard, &sampleCost, type](const Data::Symbol& symbol,
+        disassemblyResult.selfCosts.initializeCostsFrom(bottomUpResult.costs);
+        disassemblyResult.inclusiveCosts.initializeCostsFrom(bottomUpResult.costs);
+
+        bool hasStackBranch = !sample.disasmFrames.empty();
+        QVector<qint32> disasmFrames = hasStackBranch ? sample.disasmFrames : sample.frames;
+
+        auto frameCallback = [this, &hasStackBranch, &recursionGuard, &recursionDisasmGuard, &sampleCost, type](const Data::Symbol& symbol,
                                                                         const Data::Location& location) {
             addCallerCalleeEvent(symbol, location, type, sampleCost.cost, &recursionGuard, &callerCalleeResult,
                                  bottomUpResult.costs.numTypes());
 
+            if (!hasStackBranch){
+                addDisassemblyEvent(symbol, location, type, sampleCost.cost, &recursionDisasmGuard, &disassemblyResult,
+                                    bottomUpResult.costs.numTypes());
+            }
             if (perfScriptOutput) {
                 *perfScriptOutput << '\t' << hex << qSetFieldWidth(16) << location.address << qSetFieldWidth(0) << dec
                                   << ' ' << (symbol.symbol.isEmpty() ? QStringLiteral("[unknown]") : symbol.symbol)
@@ -1040,7 +1081,18 @@ public:
             }
         };
 
+        // Callback to traverse all symbols and locations of callchain and connect events costs with locations
+        auto disasmFrameCallback = [this, &recursionDisasmGuard, &sampleCost, type](const Data::Symbol& symbol,
+                                                                        const Data::Location& location) {
+            addDisassemblyEvent(symbol, location, type, sampleCost.cost, &recursionDisasmGuard, &disassemblyResult,
+                                bottomUpResult.costs.numTypes());
+        };
+
         bottomUpResult.addEvent(type, sampleCost.cost, sample.frames, frameCallback);
+
+        if (hasStackBranch) {
+            bottomUpResult.addDisasmEvent(type, sampleCost.cost, disasmFrames, disasmFrameCallback);
+        }
 
         if (perfScriptOutput) {
             *perfScriptOutput << "\n";
@@ -1280,7 +1332,7 @@ PerfParser::~PerfParser() = default;
 
 void PerfParser::startParseFile(const QString& path, const QString& sysroot, const QString& kallsyms,
                                 const QString& debugPaths, const QString& extraLibPaths, const QString& appPath,
-                                const QString& arch, const QString& disasmApproach)
+                                const QString& arch, const QString& disasmApproach, const QString& verbose)
 {
     Q_ASSERT(!m_isParsing);
 
@@ -1325,6 +1377,9 @@ void PerfParser::startParseFile(const QString& path, const QString& sysroot, con
     }
     if (!arch.isEmpty()) {
         parserArgs += {QStringLiteral("--arch"), arch};
+    }
+    if (!verbose.isEmpty()) {
+        parserArgs += {QStringLiteral("--verbose"), verbose};
     }
 
     // reset the data to ensure filtering will pick up the new data
@@ -1441,6 +1496,7 @@ void PerfParser::filterResults(const Data::FilterAction& filter)
         Data::BottomUpResults bottomUp;
         Data::EventResults events = m_events;
         Data::CallerCalleeResults callerCallee;
+        Data::DisassemblyResult disassembly = m_disassemblyResult;
         const bool filterByTime = filter.time.isValid();
         const bool filterByCpu = filter.cpuId != std::numeric_limits<quint32>::max();
         const bool excludeByCpu = !filter.excludeCpuIds.isEmpty();
@@ -1533,8 +1589,7 @@ void PerfParser::filterResults(const Data::FilterAction& filter)
                     }
 
                     QSet<Data::Symbol> recursionGuard;
-                    auto frameCallback = [&callerCallee, &recursionGuard, &event,
-                                          numCosts](const Data::Symbol& symbol, const Data::Location& location) {
+                    auto frameCallback = [&callerCallee, &recursionGuard, &event, numCosts](const Data::Symbol& symbol, const Data::Location& location) {
                         addCallerCalleeEvent(symbol, location, event.type, event.cost, &recursionGuard, &callerCallee,
                                              numCosts);
                     };
