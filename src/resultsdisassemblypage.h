@@ -30,6 +30,9 @@ public:
     ~ResultsDisassemblyPage();
 
     void clear();
+    void filterDisassemblyBytes(bool filtered);
+    void filterDisassemblyAddress(bool filtered);
+    void switchOnIntelSyntax(bool intelSyntax);
     void setAsmViewModel(QStandardItemModel *model, int numTypes);
     void showDisassembly();
     void showDisassemblyBySymbol();
@@ -68,4 +71,16 @@ private:
     QString m_objdump;
     // Map of symbols and its locations with costs
     Data::DisassemblyResult m_disasmResult;
+    // Not to show machine codes of Disassembly
+    bool m_noShowRawInsn;
+    // Not to show address of Disassembly
+    bool m_noShowAddress;
+    // Switch Assembly to Intel Syntax
+    bool m_intelSyntaxDisassembly;
+    // Setter for m_noShowRawInsn
+    void setNoShowRawInsn(bool noShowRawInsn);
+    // Setter for m_noShowAddress
+    void setNoShowAddress(bool noShowAddress);
+    // Setter for m_intelSyntaxDisassembly
+    void setIntelSyntaxDisassembly(bool intelSyntax);
 };
