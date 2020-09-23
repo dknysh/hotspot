@@ -37,9 +37,9 @@ ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, 
 
     ui->searchTextEdit->setPlaceholderText(QLatin1String("Search"));
     ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
-    ResultsUtil::setupDisassemblyContextMenu(ui->asmView);
-    connect(ui->asmView, &QAbstractItemView::doubleClicked, this, &ResultsDisassemblyPage::jumpToAsmCallee);
     m_origFontSize = this->font().pointSize();
+    setupDisassemblyContextMenu(ui->asmView, m_origFontSize);
+    connect(ui->asmView, &QAbstractItemView::doubleClicked, this, &ResultsDisassemblyPage::jumpToAsmCallee);
     m_filterAndZoomStack = filterStack;
 
     m_searchDelegate = new SearchDelegate(ui->asmView);
@@ -78,16 +78,17 @@ void ResultsDisassemblyPage::wheelEvent(QWheelEvent *event) {
  * @param event
  */
 void ResultsDisassemblyPage::zoomFont(QWheelEvent *event) {
-    QFont curFont = this->font();
-    curFont.setPointSize(curFont.pointSize() + event->delta() / 100);
+    QFont curFont = ui->asmView->font();
 
-    int fontSize = (curFont.pointSize() / (double) m_origFontSize) * 100;
-    this->setFont(curFont);
-    this->setToolTip(QLatin1String("Zoom: ") + QString::number(fontSize) + QLatin1String("%"));
+    int newFontSize = curFont.pointSize() + event->delta() / 100;
+    if (newFontSize <= 0)
+        return;
 
-    QFont textEditFont = curFont;
-    textEditFont.setPointSize(m_origFontSize);
-    ui->searchTextEdit->setFont(textEditFont);
+    curFont.setPointSize(newFontSize);
+
+    int fontSize = (newFontSize / (double) m_origFontSize) * 100;
+    ui->asmView->setFont(curFont);
+    ui->asmView->setToolTip(QLatin1String("Zoom: ") + QString::number(fontSize) + QLatin1String("%"));
 }
 
 /**
@@ -577,7 +578,7 @@ void ResultsDisassemblyPage::navigateToAddressInstruction(QModelIndex index, QSt
                 break;
             }
         }
-    }    
+    }
     ui->asmView->setCurrentIndex(selectedIndex);
     if (isScrollTo)
         ui->asmView->scrollTo(selectedIndex);
@@ -676,4 +677,46 @@ void ResultsDisassemblyPage::setNoShowAddress(bool noShowAddress) {
  */
 void ResultsDisassemblyPage::setIntelSyntaxDisassembly(bool intelSyntax) {
     m_intelSyntaxDisassembly = intelSyntax;
+}
+
+/**
+ *  Setup context menu and connect signals with slots for selected part of Disassembly view copying
+ * @param view
+ */
+void ResultsDisassemblyPage::setupDisassemblyContextMenu(QTreeView *view, int origFontSize) {
+    view->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    auto shortcut = new QShortcut(QKeySequence(QLatin1String("Ctrl+C")), view);
+    QObject::connect(shortcut, &QShortcut::activated, [view]() {
+        ResultsUtil::copySelectedDisassembly(view);
+    });
+
+    QObject::connect(view, &QTreeView::customContextMenuRequested, view, [view, origFontSize, this]() {
+        QMenu contextMenu;
+        auto *copyAction = contextMenu.addAction(QLatin1String("Copy"));
+        auto *exportToCSVAction = contextMenu.addAction(QLatin1String("Export to CSV..."));
+        auto *zoomInAction = contextMenu.addAction(QLatin1String("Zoom In"));
+        auto *zoomOutAction = contextMenu.addAction(QLatin1String("Zoom Out"));
+
+        QObject::connect(copyAction, &QAction::triggered, &contextMenu, [view]() {
+            ResultsUtil::copySelectedDisassembly(view);
+        });
+        QObject::connect(exportToCSVAction, &QAction::triggered, &contextMenu, [view]() {
+            ResultsUtil::exportToCSVDisassembly(view);
+        });
+        QObject::connect(zoomInAction, &QAction::triggered, &contextMenu, [view, origFontSize]() {
+            ResultsUtil::zoomFont(view, origFontSize, 4);
+        });
+        QObject::connect(zoomOutAction, &QAction::triggered, &contextMenu, [view, origFontSize]() {
+            ResultsUtil::zoomFont(view, origFontSize, -4);
+        });
+
+        if (!m_callStack.isEmpty()) {
+            auto *returnToCallerAction = contextMenu.addAction(QLatin1String("Return to Caller"));
+            QObject::connect(returnToCallerAction, &QAction::triggered, &contextMenu, [this]() {
+                this->returnToCaller();
+            });
+        }
+        contextMenu.exec(QCursor::pos());
+    });
 }
