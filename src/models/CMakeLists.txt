@@ -3,6 +3,7 @@ add_library(models STATIC
     topproxy.cpp
     data.cpp
     callercalleemodel.cpp
+    disassemblymodel.cpp
     costdelegate.cpp
     searchdelegate.cpp
     processmodel.cpp
