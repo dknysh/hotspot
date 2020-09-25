@@ -33,6 +33,7 @@ public:
     void filterDisassemblyBytes(bool filtered);
     void filterDisassemblyAddress(bool filtered);
     void switchOnIntelSyntax(bool intelSyntax);
+    QByteArray processDisassemblyGenRun(QString processName);
     void setAsmViewModel(QStandardItemModel *model, int numTypes);
     void showDisassembly();
     void showDisassemblyBySymbol();
@@ -43,6 +44,9 @@ public:
     void setData(const Data::Symbol& data);
     void setData(const Data::DisassemblyResult& data);
     void resetCallStack();
+    void zoomFont(QWheelEvent *event);
+    void wheelEvent(QWheelEvent *event);
+    void getObjdumpVersion(QByteArray &processOutput);
 
 signals:
     void doubleClicked(QModelIndex);
@@ -50,6 +54,7 @@ public slots:
     void jumpToAsmCallee(QModelIndex);
 
 private:
+    FilterAndZoomStack* m_filterAndZoomStack;
     QScopedPointer<Ui::ResultsDisassemblyPage> ui;
     // Asm view model
     QStandardItemModel *model;
@@ -59,6 +64,8 @@ private:
     QString m_perfDataPath;
     // Current chosen function symbol
     Data::Symbol m_curSymbol;
+    // Actual application path for current selected symbol
+    QString m_curAppPath;
     // Application path
     QString m_appPath;
     // Extra libs path
@@ -77,6 +84,10 @@ private:
     bool m_noShowAddress;
     // Switch Assembly to Intel Syntax
     bool m_intelSyntaxDisassembly;
+    // Default font size
+    int m_origFontSize;
+    // Version of objdump
+    QString m_objdumpVersion;
     // Setter for m_noShowRawInsn
     void setNoShowRawInsn(bool noShowRawInsn);
     // Setter for m_noShowAddress
