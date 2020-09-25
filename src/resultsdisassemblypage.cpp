@@ -263,6 +263,7 @@ QByteArray ResultsDisassemblyPage::processDisassemblyGenRun(QString processName)
                     processOutput = QByteArray(
                             "Process was not started. Probably command 'arm-linux-gnueabi-objdump' not found, but can be installed with 'apt install binutils-arm-linux-gnueabi'");
                 }
+                m_searchDelegate->setDiagnosticStyle(true);
             } else {
                 return processOutput;
             }
@@ -277,6 +278,7 @@ QByteArray ResultsDisassemblyPage::processDisassemblyGenRun(QString processName)
             if (m_objdumpVersion.isEmpty()) {
                 getObjdumpVersion(processOutput);
             }
+            m_searchDelegate->setDiagnosticStyle(true);
         }
     }
     return processOutput;
@@ -404,6 +406,7 @@ void ResultsDisassemblyPage::setData(const Data::Symbol &symbol) {
             m_tmpAppList.push_back(linkPath);
         }
     }
+    m_searchDelegate->setDiagnosticStyle(false);
 }
 
 /**
@@ -424,6 +427,7 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data) {
         m_arch = QLatin1String("armv8");
         m_objdump = QLatin1String("aarch64-linux-gnu-objdump");
     }
+    m_searchDelegate->setArch(m_arch);
 }
 
 /**
