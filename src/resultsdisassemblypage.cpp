@@ -18,22 +18,52 @@
 #include "parsers/perf/perfparser.h"
 #include "resultsutil.h"
 
+#include "models/filterandzoomstack.h"
 #include "models/costdelegate.h"
 #include "models/hashmodel.h"
 #include "models/topproxy.h"
 #include "models/treemodel.h"
 
 #include <QStandardItemModel>
+#include <QWheelEvent>
+#include <QToolTip>
 
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
         : QWidget(parent), ui(new Ui::ResultsDisassemblyPage), m_noShowRawInsn(true), m_noShowAddress(false), m_intelSyntaxDisassembly(false) {
     ui->setupUi(this);
 
-    connect(ui->asmView, &QAbstractItemView::doubleClicked, this,
-            &ResultsDisassemblyPage::jumpToAsmCallee);
+    connect(ui->asmView, &QAbstractItemView::doubleClicked, this, &ResultsDisassemblyPage::jumpToAsmCallee);
+    m_origFontSize = this->font().pointSize();
+    m_filterAndZoomStack = filterStack;
 }
 
 ResultsDisassemblyPage::~ResultsDisassemblyPage() = default;
+
+/**
+ *  Override QWidget::wheelEvent
+ * @param event
+ */
+void ResultsDisassemblyPage::wheelEvent(QWheelEvent *event) {
+    if (event->modifiers() == Qt::ControlModifier) {
+        zoomFont(event);
+    }
+}
+
+/**
+ *  Change font size depending on mouse wheel movement
+ * @param event
+ */
+void ResultsDisassemblyPage::zoomFont(QWheelEvent *event) {
+    QFont curFont = this->font();
+    curFont.setPointSize(curFont.pointSize() + event->delta() / 100);
+
+    int fontSize = (curFont.pointSize() / (double) m_origFontSize) * 100;
+    this->setFont(curFont);
+    this->setToolTip(QLatin1String("Zoom: ") + QString::number(fontSize) + QLatin1String("%"));
+
+    QFont textEditFont = curFont;
+    textEditFont.setPointSize(m_origFontSize);
+}
 
 /**
  *  Hide instruction bytes when an argument is true
@@ -94,10 +124,10 @@ void ResultsDisassemblyPage::setAsmViewModel(QStandardItemModel *model, int numT
  *  Produce and show disassembly with 'objdump' depending on passed value through option --disasm-approach=<value>
  */
 void ResultsDisassemblyPage::showDisassembly() {
-    if (m_disasmApproach.isEmpty() || m_disasmApproach.startsWith(QLatin1String("address"))) {
-        showDisassemblyByAddressRange();
-    } else {
+    if (m_disasmApproach.isEmpty() || m_disasmApproach.startsWith(QLatin1String("symbol"))) {
         showDisassemblyBySymbol();
+    } else {
+        showDisassemblyByAddressRange();
     }
 }
 
@@ -108,12 +138,11 @@ void ResultsDisassemblyPage::showDisassemblyBySymbol() {
     // Show empty tab when selected symbol is not valid
     if (m_curSymbol.symbol.isEmpty()) {
         clear();
-        return;
     }
 
     // Call objdump with arguments: mangled name of function and binary file
     QString processName =
-            m_objdump + QLatin1String(" --disassemble=") + m_curSymbol.mangled + QLatin1String(" ") + m_curSymbol.path;
+            m_objdump + QLatin1String(" --disassemble=") + m_curSymbol.mangled + QLatin1String(" ") + m_curAppPath;
 
     showDisassembly(processName);
 }
@@ -125,7 +154,6 @@ void ResultsDisassemblyPage::showDisassemblyByAddressRange() {
     // Show empty tab when selected symbol is not valid
     if (m_curSymbol.symbol.isEmpty()) {
         clear();
-        return;
     }
 
     // Call objdump with arguments: addresses range and binary file
@@ -133,15 +161,81 @@ void ResultsDisassemblyPage::showDisassemblyByAddressRange() {
             m_objdump + QLatin1String(" -d --start-address=0x") + QString::number(m_curSymbol.relAddr, 16) +
             QLatin1String(" --stop-address=0x") +
             QString::number(m_curSymbol.relAddr + m_curSymbol.size, 16) +
-            QLatin1String(" ") + m_curSymbol.path;
+            QLatin1String(" ") + m_curAppPath;
 
     // Workaround for the case when symbol size is equal to zero
     if (m_curSymbol.size == 0) {
         processName =
                 m_objdump + QLatin1String(" --disassemble=") + m_curSymbol.mangled + QLatin1String(" ") +
-                m_curSymbol.path;
+                m_curAppPath;
     }
     showDisassembly(processName);
+}
+
+/**
+ *  Compute installed objdump version. If it is less than required 2.32 then Disassembly item is disabled.
+ * @return
+ */
+void ResultsDisassemblyPage::getObjdumpVersion(QByteArray &processOutput) {
+    QProcess versionProcess;
+    QString processVersionName = m_objdump + QLatin1String(" -v");
+    versionProcess.start(processVersionName);
+    if (versionProcess.waitForStarted() && versionProcess.waitForFinished()) {
+        QByteArray versionLine = versionProcess.readLine();
+        QString version = QString::fromStdString(versionLine.toStdString());
+
+        QRegExp rx(QLatin1String("\\d+\\.\\d+"));
+        int pos = rx.lastIndexIn(version);
+        m_objdumpVersion = rx.capturedTexts().at(0);
+        if (m_objdumpVersion.toFloat() < 2.32) {
+            m_filterAndZoomStack->actions().disassembly->setEnabled(false);
+            processOutput = QByteArray("Version of objdump should be >= 2.32. You use objdump with version ") +
+                            m_objdumpVersion.toUtf8();
+        }
+    }    
+}
+
+/**
+ * Run processName command in QProcess and diagnoses some cases
+ * @param processName
+ * @return
+ */
+QByteArray ResultsDisassemblyPage::processDisassemblyGenRun(QString processName) {
+    QByteArray processOutput = QByteArray();
+    if (m_curSymbol.symbol.isEmpty()) {
+        processOutput = "Empty symbol ?? is selected";
+    } else {
+        QProcess asmProcess;
+        asmProcess.start(processName);
+
+        bool started = asmProcess.waitForStarted();
+        bool finished = asmProcess.waitForFinished();
+        if (!started || !finished) {
+            if (!started) {
+                if (!m_arch.startsWith(QLatin1String("arm"))) {
+                    processOutput = QByteArray(
+                            "Process was not started. Probably command 'objdump' not found, but can be installed with 'apt install binutils'");
+                } else {
+                    processOutput = QByteArray(
+                            "Process was not started. Probably command 'arm-linux-gnueabi-objdump' not found, but can be installed with 'apt install binutils-arm-linux-gnueabi'");
+                }
+            } else {
+                return processOutput;
+            }
+        } else {
+            processOutput = asmProcess.readAllStandardOutput();
+        }
+
+        if (processOutput.isEmpty()) {
+            processOutput = QByteArray("Empty output of command ");
+            processOutput += processName.toUtf8();
+
+            if (m_objdumpVersion.isEmpty()) {
+                getObjdumpVersion(processOutput);
+            }
+        }
+    }
+    return processOutput;
 }
 
 /**
@@ -155,16 +249,10 @@ void ResultsDisassemblyPage::showDisassembly(QString processName) {
         processName += QLatin1String(" -M intel ");
 
     QTemporaryFile m_tmpFile;
-    QProcess asmProcess;
 
     if (m_tmpFile.open()) {
-        asmProcess.start(processName);
-
-        if (!asmProcess.waitForStarted() || !asmProcess.waitForFinished()) {
-            return;
-        }
         QTextStream stream(&m_tmpFile);
-        stream << asmProcess.readAllStandardOutput();
+        stream << processDisassemblyGenRun(processName);
         m_tmpFile.close();
     }
 
@@ -238,12 +326,14 @@ void ResultsDisassemblyPage::setData(const Data::Symbol &symbol) {
     if (m_curSymbol.symbol.isEmpty()) {
         return;
     }
+
+    m_curAppPath = m_curSymbol.path;
     // If binary is not found at the specified path, use current binary file located at the application path
-    if (!QFile::exists(m_curSymbol.path)) {
-        m_curSymbol.path = m_appPath + QDir::separator() + m_curSymbol.binary;
+    if (!QFile::exists(m_curAppPath) || m_arch.startsWith(QLatin1String("arm"))) {
+        m_curAppPath = m_appPath + QDir::separator() + m_curSymbol.binary;
     }
     // If binary is still not found, trying to find it in extraLibPaths
-    if (!QFile::exists(m_curSymbol.path)) {
+    if (!QFile::exists(m_curAppPath) || m_arch.startsWith(QLatin1String("arm"))) {
         QStringList dirs = m_extraLibPaths.split(QLatin1String(":"));
         foreach (QString dir, dirs) {
             QDirIterator it(dir, QDir::Dirs, QDirIterator::Subdirectories);
@@ -252,7 +342,7 @@ void ResultsDisassemblyPage::setData(const Data::Symbol &symbol) {
                 QString dirName = it.next();
                 QString fileName = dirName + QDir::separator() + m_curSymbol.binary;
                 if (QFile::exists(fileName)) {
-                    m_curSymbol.path = fileName;
+                    m_curAppPath = fileName;
                     break;
                 }
             }
@@ -273,7 +363,6 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data) {
 
     m_objdump = m_arch.startsWith(QLatin1String("arm")) ? QLatin1String("arm-linux-gnueabi-objdump") : QLatin1String(
             "objdump");
-
     if (m_arch.startsWith(QLatin1String("armv8")) || m_arch.startsWith(QLatin1String("aarch64"))) {
         m_arch = QLatin1String("armv8");
         m_objdump = QLatin1String("aarch64-linux-gnu-objdump");
