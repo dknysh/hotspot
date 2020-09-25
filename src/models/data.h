@@ -140,19 +140,22 @@ inline uint qHash(const Symbol& symbol, uint seed = 0)
 
 struct Location
 {
-    Location(quint64 address = 0, const QString& location = {})
+    Location(quint64 address = 0, quint64 relAddr = 0, const QString& location = {})
         : address(address)
+        , relAddr(relAddr)
         , location(location)
     {
     }
 
     quint64 address = 0;
+    // relative address
+    quint64 relAddr = 0;
     // file + line
     QString location;
 
     bool operator<(const Location& rhs) const
     {
-        return std::tie(address, location) < std::tie(rhs.address, rhs.location);
+        return std::tie(address, relAddr, location) < std::tie(rhs.address, rhs.relAddr, rhs.location);
     }
 };
 
@@ -160,7 +163,7 @@ QDebug operator<<(QDebug stream, const Location& location);
 
 inline bool operator==(const Location& lhs, const Location& rhs)
 {
-    return std::tie(lhs.address, lhs.location) == std::tie(rhs.address, rhs.location);
+    return std::tie(lhs.address, lhs.relAddr, lhs.location) == std::tie(rhs.address, rhs.relAddr, rhs.location);
 }
 
 inline bool operator!=(const Location& lhs, const Location& rhs)
@@ -172,6 +175,7 @@ inline uint qHash(const Location& location, uint seed = 0)
 {
     Util::HashCombine hash;
     seed = hash(seed, location.address);
+    seed = hash(seed, location.relAddr);
     seed = hash(seed, location.location);
     return seed;
 }
