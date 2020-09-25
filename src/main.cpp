@@ -121,6 +121,11 @@ int main(int argc, char** argv)
                             QLatin1String("disasmApproach"));
     parser.addOption(disasmApproach);
 
+    QCommandLineOption maxStack(QLatin1String("max-stack"),
+                                QCoreApplication::translate("main", "Maximum call chain and branch stack sizes."),
+                                QLatin1String("max-stack"));
+    parser.addOption(maxStack);
+
     parser.addPositionalArgument(
         QStringLiteral("files"),
         QCoreApplication::translate("main", "Optional input files to open on startup, i.e. perf.data files."),
@@ -151,6 +156,9 @@ int main(int argc, char** argv)
         }
         if (parser.isSet(disasmApproach)) {
             window->setDisasmApproach(parser.value(disasmApproach));
+        }
+        if (parser.isSet(maxStack)) {
+            window->setMaxStack(parser.value(maxStack));
         }
     };
 
