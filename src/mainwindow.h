@@ -69,6 +69,7 @@ public slots:
     void setAppPath(const QString& path);
     void setArch(const QString& arch);
     void setDisasmApproach(const QString& disasmApproach);
+    void setMaxStack(const QString& maxStack);
 
     void clear();
     void openFile(const QString& path);
@@ -119,6 +120,8 @@ private:
     QString m_arch;
     // Disassembly approach code: 'symbol' - by function symbol, 'address' or default - by addresses range
     QString m_disasmApproach;
+    // Maximum call chain and branch stack size
+    QString m_maxStack;
     KRecentFilesAction* m_recentFilesAction = nullptr;
     QAction* m_reloadAction = nullptr;
 };
