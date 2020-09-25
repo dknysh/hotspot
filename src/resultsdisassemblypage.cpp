@@ -26,7 +26,7 @@
 #include <QStandardItemModel>
 
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
-        : QWidget(parent), ui(new Ui::ResultsDisassemblyPage) {
+        : QWidget(parent), ui(new Ui::ResultsDisassemblyPage), m_noShowRawInsn(true), m_noShowAddress(false), m_intelSyntaxDisassembly(false) {
     ui->setupUi(this);
 
     connect(ui->asmView, &QAbstractItemView::doubleClicked, this,
@@ -34,6 +34,33 @@ ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, 
 }
 
 ResultsDisassemblyPage::~ResultsDisassemblyPage() = default;
+
+/**
+ *  Hide instruction bytes when an argument is true
+ * @param filtered
+ */
+void ResultsDisassemblyPage::filterDisassemblyBytes(bool filtered) {
+    setNoShowRawInsn(filtered);
+    showDisassembly();
+}
+
+/**
+ *  Hide instruction address when an argument is true
+ * @param filtered
+ */
+void ResultsDisassemblyPage::filterDisassemblyAddress(bool filtered) {
+    setNoShowAddress(filtered);
+    showDisassembly();
+}
+
+/**
+ *
+ * @param intelSyntax
+ */
+void ResultsDisassemblyPage::switchOnIntelSyntax(bool intelSyntax) {
+    setIntelSyntaxDisassembly(intelSyntax);
+    showDisassembly();
+}
 
 /**
  *  Clear
@@ -121,6 +148,12 @@ void ResultsDisassemblyPage::showDisassemblyByAddressRange() {
  *  Produce disassembler with 'objdump' and output to Disassembly tab
  */
 void ResultsDisassemblyPage::showDisassembly(QString processName) {
+    if (m_noShowRawInsn)
+        processName += QLatin1String(" --no-show-raw-insn ");
+
+    if (m_intelSyntaxDisassembly)
+        processName += QLatin1String(" -M intel ");
+
     QTemporaryFile m_tmpFile;
     QProcess asmProcess;
 
@@ -155,6 +188,13 @@ void ResultsDisassemblyPage::showDisassembly(QString processName) {
             QString addrLine = asmTokens.value(0);
             QString costLine = QString();
 
+            if (m_noShowAddress) {
+                QRegExp hexMatcher(QLatin1String("[0-9A-F]+$"), Qt::CaseInsensitive);
+                if (hexMatcher.exactMatch(addrLine.trimmed())) {
+                    asmTokens.removeFirst();
+                    asmLine = asmTokens.join(QLatin1Char(':')).trimmed();
+                }
+            }
             QStandardItem *asmItem = new QStandardItem();
             asmItem->setText(asmLine);
             model->setItem(row, 0, asmItem);
@@ -294,4 +334,28 @@ void ResultsDisassemblyPage::jumpToAsmCallee(QModelIndex index) {
         }
     }
     showDisassembly();
+}
+
+/**
+ *  Setter for m_noShowRawInsn
+ * @param noShowRawInsn
+ */
+void ResultsDisassemblyPage::setNoShowRawInsn(bool noShowRawInsn) {
+    m_noShowRawInsn = noShowRawInsn;
+}
+
+/**
+ *  Setter for m_noShowAddress
+ * @param noShowAddress
+ */
+void ResultsDisassemblyPage::setNoShowAddress(bool noShowAddress) {
+    m_noShowAddress = noShowAddress;
+}
+
+/**
+ *  Setter for m_intelSyntaxDisassembly
+ * @param intelSyntax
+ */
+void ResultsDisassemblyPage::setIntelSyntaxDisassembly(bool intelSyntax) {
+    m_intelSyntaxDisassembly = intelSyntax;
 }
