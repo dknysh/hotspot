@@ -563,6 +563,33 @@ struct SymbolCount {
     qint32 total = 0;
     qint32 missing = 0;
 };
+
+/**
+ * Calculate and set event cost value for location detailed to assembly instructions
+ * @param symbol
+ * @param location
+ * @param type
+ * @param cost
+ * @param recursionGuard
+ * @param disassemblyResult
+ * @param numCosts
+ */
+    void addDisassemblyEvent(const Data::Symbol &symbol, const Data::Location &location, int type, quint64 cost,
+                             QSet<Data::Symbol> *recursionGuard, Data::DisassemblyResult *disassemblyResult,
+                             int numCosts)
+    {
+        auto recursionIt = recursionGuard->find(symbol);
+        if (recursionIt == recursionGuard->end()) {
+            auto &entry = disassemblyResult->entry(symbol);
+            auto &locationCost = entry.source(location, numCosts);
+            if (recursionGuard->isEmpty()) {
+                // increment self cost for leaf
+                locationCost.selfCost[type] += cost;
+            }
+            recursionGuard->insert(symbol);
+        }
+    }
+
 }
 
 Q_DECLARE_TYPEINFO(AttributesDefinition, Q_MOVABLE_TYPE);
@@ -1021,7 +1048,7 @@ public:
                               << strings.value(attributes.value(sampleCost.attributeId).name.id) << '\n';
         }
 
-        QSet<Data::Symbol> recursionGuard;
+        QSet<Data::Symbol> recursionGuard, recursionDisasmGuard;
         const auto type = attributeIdsToCostIds.value(sampleCost.attributeId, -1);
 
         if (type < 0) {
@@ -1030,10 +1057,16 @@ public:
             return;
         }
 
-        auto frameCallback = [this, &recursionGuard, &sampleCost, type](const Data::Symbol& symbol,
+        disassemblyResult.selfCosts.initializeCostsFrom(bottomUpResult.costs);
+        disassemblyResult.inclusiveCosts.initializeCostsFrom(bottomUpResult.costs);
+
+        auto frameCallback = [this, &recursionGuard, &recursionDisasmGuard, &sampleCost, type](const Data::Symbol& symbol,
                                                                         const Data::Location& location) {
             addCallerCalleeEvent(symbol, location, type, sampleCost.cost, &recursionGuard, &callerCalleeResult,
                                  bottomUpResult.costs.numTypes());
+
+            addDisassemblyEvent(symbol, location, type, sampleCost.cost, &recursionDisasmGuard, &disassemblyResult,
+                                    bottomUpResult.costs.numTypes());
 
             if (perfScriptOutput) {
                 *perfScriptOutput << '\t' << hex << qSetFieldWidth(16) << location.address << qSetFieldWidth(0) << dec
@@ -1443,6 +1476,7 @@ void PerfParser::filterResults(const Data::FilterAction& filter)
         Data::BottomUpResults bottomUp;
         Data::EventResults events = m_events;
         Data::CallerCalleeResults callerCallee;
+        Data::DisassemblyResult disassembly = m_disassemblyResult;
         const bool filterByTime = filter.time.isValid();
         const bool filterByCpu = filter.cpuId != std::numeric_limits<quint32>::max();
         const bool excludeByCpu = !filter.excludeCpuIds.isEmpty();
