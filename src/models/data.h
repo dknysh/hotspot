@@ -583,6 +583,8 @@ struct DisassemblyResult {
     QString arch;
     // Application path
     QString appPath;
+    // Target root
+    QString targetRoot;
     // Extra lib paths
     QString extraLibPaths;
     // perf.data path
@@ -593,6 +595,7 @@ struct DisassemblyResult {
     void copy(const DisassemblyResult &orig) {
         this->perfDataPath = orig.perfDataPath;
         this->appPath = orig.appPath;
+        this->targetRoot = orig.targetRoot;
         this->extraLibPaths = orig.extraLibPaths;
         if (!orig.arch.isEmpty()) {
             this->arch = orig.arch;
@@ -602,9 +605,10 @@ struct DisassemblyResult {
         }
     }
 
-    void setData(QString perfDataPath, QString appPath, QString extraLibPaths, QString arch, QString disasmApproach) {
+    void setData(QString perfDataPath, QString appPath, QString targetRoot, QString extraLibPaths, QString arch, QString disasmApproach) {
         this->perfDataPath = perfDataPath;
         this->appPath = appPath;
+        this->targetRoot = targetRoot;
         this->extraLibPaths = extraLibPaths;
         if (!arch.isEmpty()) {
             this->arch = arch;
