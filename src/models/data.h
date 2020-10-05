@@ -46,9 +46,11 @@ QString prettifySymbol(const QString& symbol);
 
 struct Symbol
 {
-    Symbol(const QString& symbol = {}, const QString& binary = {}, const QString& path = {})
+    Symbol(const QString& symbol = {}, const quint64& relAddr = 0, const quint64& size = 0, const QString& binary = {}, const QString& path = {})
         : symbol(symbol)
         , prettySymbol(Data::prettifySymbol(symbol))
+        , relAddr(relAddr)
+        , size(size)
         , binary(binary)
         , path(path)
     {
@@ -58,6 +60,10 @@ struct Symbol
     QString symbol;
     // prettified function name
     QString prettySymbol;
+    // relative address
+    quint64 relAddr;
+    // size of frame
+    quint64 size;
     // dso / executable name
     QString binary;
     // path to dso / executable
@@ -71,6 +77,43 @@ struct Symbol
     bool isValid() const
     {
         return !symbol.isEmpty() || !binary.isEmpty() || !path.isEmpty();
+    }
+};
+
+struct DisassemblyResult {
+    // Architecture
+    QString arch;
+    // Application path
+    QString appPath;
+    // Extra libs path
+    QString extraLibPaths;
+    // perf.data path
+    QString perfDataPath;
+    // Disassembly approach code: 'symbol' - by function symbol, 'address' or default - by addresses range
+    QString disasmApproach;
+
+    void copy(const DisassemblyResult &orig) {
+        this->perfDataPath = orig.perfDataPath;
+        this->appPath = orig.appPath;
+        this->extraLibPaths = orig.extraLibPaths;
+        if (!orig.arch.isEmpty()) {
+            this->arch = orig.arch;
+        }
+        if (!orig.disasmApproach.isEmpty()) {
+            this->disasmApproach = orig.disasmApproach;
+        }
+    }
+
+    void setData(QString perfDataPath, QString appPath, QString extraLibPaths, QString arch, QString disasmApproach) {
+        this->perfDataPath = perfDataPath;
+        this->appPath = appPath;
+        this->extraLibPaths = extraLibPaths;
+        if (!arch.isEmpty()) {
+            this->arch = arch;
+        }
+        if (!disasmApproach.isEmpty()) {
+            this->disasmApproach = disasmApproach;
+        }
     }
 };
 
@@ -746,6 +789,9 @@ struct ZoomAction
 
 Q_DECLARE_METATYPE(Data::Symbol)
 Q_DECLARE_TYPEINFO(Data::Symbol, Q_MOVABLE_TYPE);
+
+Q_DECLARE_METATYPE(Data::DisassemblyResult)
+Q_DECLARE_TYPEINFO(Data::DisassemblyResult, Q_MOVABLE_TYPE);
 
 Q_DECLARE_METATYPE(Data::Location)
 Q_DECLARE_TYPEINFO(Data::Location, Q_MOVABLE_TYPE);
