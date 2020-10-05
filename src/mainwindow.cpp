@@ -45,6 +45,9 @@
 #include <QStandardPaths>
 #include <QWidgetAction>
 
+#include <QPushButton>
+#include <QWidget>
+
 #include <KConfigGroup>
 #include <KRecentFilesAction>
 #include <KStandardAction>
@@ -182,7 +185,11 @@ MainWindow::MainWindow(QWidget* parent)
     connect(prettifySymbolsAction, &QAction::toggled, Settings::instance(), &Settings::setPrettifySymbols);
 
     ui->viewMenu->addSeparator();
-    ui->viewMenu->addActions(m_resultsPage->filterMenu()->actions());
+
+    QList<QAction *> actions = m_resultsPage->filterMenu()->actions();
+    // Disassembly menu items should not be presented here
+    actions.removeFirst();
+    ui->viewMenu->addActions(actions);
     ui->viewMenu->addSeparator();
     ui->viewMenu->addMenu(m_resultsPage->exportMenu());
 
