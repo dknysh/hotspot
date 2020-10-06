@@ -33,6 +33,7 @@ public:
     ~ResultsDisassemblyPage();
 
     void clear();
+    void clearTmpFiles();
     void filterDisassemblyBytes(bool filtered);
     void filterDisassemblyAddress(bool filtered);
     void switchOnIntelSyntax(bool intelSyntax);
@@ -71,8 +72,12 @@ private:
     Data::Symbol m_curSymbol;
     // Actual application path for current selected symbol
     QString m_curAppPath;
+    // List of symbol links in /tmp
+    QStringList m_tmpAppList;
     // Application path
     QString m_appPath;
+    // Target root
+    QString m_targetRoot;
     // Extra libs path
     QString m_extraLibPaths;
     // Architecture
