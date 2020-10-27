@@ -238,6 +238,7 @@ void ResultsPage::setData(const Data::Symbol& data)
 void ResultsPage::setData(const Data::DisassemblyResult& data)
 {
     m_resultsDisassemblyPage->setData(data);
+    m_resultsDisassemblyPage->resetCallStack();
 }
 
 void ResultsPage::onJumpToDisassembly(const Data::Symbol& symbol)

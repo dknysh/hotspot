@@ -55,6 +55,9 @@
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
         : QWidget(parent), ui(new Ui::ResultsDisassemblyPage) {
     ui->setupUi(this);
+
+    connect(ui->asmView, &QAbstractItemView::doubleClicked, this,
+            &ResultsDisassemblyPage::jumpToAsmCallee);
 }
 
 ResultsDisassemblyPage::~ResultsDisassemblyPage() = default;
@@ -113,7 +116,7 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
 
     if (m_tmpFile.open()) {
         int row = 0;
-        QStandardItemModel *model = new QStandardItemModel();
+        model = new QStandardItemModel();
 
         QStringList headerList;
         headerList.append(QLatin1String("Assembly"));
@@ -187,4 +190,58 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data) {
         m_arch = QLatin1String("armv8");
         m_objdump = QLatin1String("aarch64-linux-gnu-objdump");
     }
+}
+
+/**
+ * Clear call stack when another symbol was selected
+ */
+void ResultsDisassemblyPage::resetCallStack() {
+    m_callStack.clear();
+}
+
+/**
+ *  Auxilary method to extract relative address of selected 'call' instruction and it's name
+ */
+void calcFunction(QString asmLineCall, QString *offset, QString *symName) {
+    QStringList sym = asmLineCall.trimmed().split(QLatin1Char('<'));
+    *offset = sym[0].trimmed();
+    *symName = sym[1].replace(QLatin1Char('>'), QLatin1String(""));
+}
+
+/**
+ *  Slot method for double click on 'call' or 'return' instructions
+ *  We show it's Disassembly by double click on 'call' instruction
+ *  And we go back by double click on 'return'
+ */
+void ResultsDisassemblyPage::jumpToAsmCallee(QModelIndex index) {
+    QStandardItem *asmItem = model->takeItem(index.row(), 0);
+    QString opCodeCall = m_arch.startsWith(QLatin1String("arm")) ? QLatin1String("bl") : QLatin1String("callq");
+    QString opCodeReturn = m_arch.startsWith(QLatin1String("arm")) ? QLatin1String("ret") : QLatin1String("retq");
+    QString asmLine = asmItem->text();
+    if (asmLine.contains(opCodeCall)) {
+        QString offset, symName;
+        QString asmLineSimple = asmLine.simplified();
+
+        calcFunction(asmLineSimple.section(opCodeCall, 1), &offset, &symName);
+
+        QHash<Data::Symbol, Data::DisassemblyEntry>::iterator i = m_disasmResult.entries.begin();
+        while (i != m_disasmResult.entries.end()) {
+            QString relAddr = QString::number(i.key().relAddr, 16);
+            if (!i.key().symbol.isEmpty() &&
+                (i.key().binary == m_curSymbol.binary) &&
+                (relAddr == offset))
+            {
+                m_callStack.push(m_curSymbol);
+                setSymbol(i.key());
+                break;
+            }
+            i++;
+        }
+    }
+    if (asmLine.contains(opCodeReturn)) {
+        if (!m_callStack.isEmpty()) {
+            setSymbol(m_callStack.pop());
+        }
+    }
+    showDisassembly();
 }
