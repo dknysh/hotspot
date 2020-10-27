@@ -279,6 +279,11 @@ void ResultsPage::filterDisassemblyAddress(bool filtered) {
     m_resultsDisassemblyPage->filterDisassemblyAddress(filtered);
 }
 
+void ResultsPage::clearTmpFiles()
+{
+    m_resultsDisassemblyPage->clearTmpFiles();
+}
+
 void ResultsPage::switchOnIntelSyntax(bool intelSyntax) {
     m_resultsDisassemblyPage->switchOnIntelSyntax(intelSyntax);
 }

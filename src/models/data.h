@@ -585,6 +585,8 @@ struct DisassemblyResult
     QString arch;
     // Application path
     QString appPath;
+    // Target root
+    QString targetRoot;
     // Extra lib paths
     QString extraLibPaths;
     // perf.data path

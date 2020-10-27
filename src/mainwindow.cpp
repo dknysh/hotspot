@@ -182,6 +182,9 @@ MainWindow::MainWindow(QWidget* parent)
     auto config = m_config->group("Window");
     restoreGeometry(config.readEntry("geometry", QByteArray()));
     restoreState(config.readEntry("state", QByteArray()));
+
+    // Initially set on the Override app path with perf data path option
+    m_overrideAppPathWithPerfDataPath = true;
 }
 
 MainWindow::~MainWindow() = default;
@@ -193,6 +196,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
     config.writeEntry("state", saveState());
 
     m_parser->stop();
+    m_resultsPage->clearTmpFiles();
     QMainWindow::closeEvent(event);
 }
 
@@ -226,6 +230,18 @@ void MainWindow::setAppPath(const QString& path)
     emit appPathChanged(m_appPath);
 }
 
+void MainWindow::setPerfDataPath(const QString& path) {
+    m_perfDataPath = path;
+}
+
+void MainWindow::setOverrideAppPathWithPerfDataPath(bool b) {
+    m_overrideAppPathWithPerfDataPath = b;
+}
+
+void MainWindow::setTargetRoot(const QString& path) {
+    m_targetRoot = path;
+}
+
 void MainWindow::setArch(const QString& arch)
 {
     m_arch = arch;
@@ -238,6 +254,18 @@ QString MainWindow::getSysroot() const {
 
 QString MainWindow::getApplicationPath() const {
     return m_appPath;
+}
+
+QString MainWindow::getPerfDataPath() const {
+    return m_perfDataPath;
+}
+
+bool MainWindow::getOverrideAppPathWithPerfDataPath() const {
+    return m_overrideAppPathWithPerfDataPath;
+}
+
+QString MainWindow::getTargetRoot() const {
+    return m_targetRoot;
 }
 
 QString MainWindow::getExtraLibPaths() const {
@@ -263,6 +291,13 @@ void MainWindow::onOpenFileButtonClicked()
     if (fileName.isEmpty()) {
         return;
     }
+
+    // Save chosen perf data path to use in Settings Dialog
+    QFileInfo file(fileName);
+    m_perfDataPath = file.path();
+    // If override app path with perf data path is switched on, override app path with perf data path
+    if (m_overrideAppPathWithPerfDataPath)
+        setAppPath(m_perfDataPath);
 
     openFile(fileName);
 }
@@ -316,7 +351,7 @@ void MainWindow::openFile(const QString& path, bool isReload)
     m_pageStack->setCurrentWidget(m_startPage);
 
     // TODO: support input files of different types via plugins
-    m_parser->startParseFile(path, m_sysroot, m_kallsyms, m_debugPaths, m_extraLibPaths, m_appPath, m_arch);
+    m_parser->startParseFile(path, m_sysroot, m_kallsyms, m_debugPaths, m_extraLibPaths, m_appPath, m_targetRoot, m_arch);
     m_reloadAction->setEnabled(true);
     m_reloadAction->setData(path);
 
