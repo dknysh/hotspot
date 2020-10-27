@@ -45,12 +45,15 @@
 #include "parsers/perf/perfparser.h"
 #include "resultsutil.h"
 
+#include "models/filterandzoomstack.h"
 #include "models/costdelegate.h"
 #include "models/hashmodel.h"
 #include "models/topproxy.h"
 #include "models/treemodel.h"
 
 #include <QStandardItemModel>
+#include <QWheelEvent>
+#include <QToolTip>
 
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
         : QWidget(parent)
@@ -62,9 +65,31 @@ ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, 
     ui->setupUi(this);
 
     connect(ui->asmView, &QAbstractItemView::doubleClicked, this, &ResultsDisassemblyPage::jumpToAsmCallee);
+    m_origFontSize = this->font().pointSize();
+    m_filterAndZoomStack = filterStack;
 }
 
 ResultsDisassemblyPage::~ResultsDisassemblyPage() = default;
+
+void ResultsDisassemblyPage::wheelEvent(QWheelEvent *event)
+{
+    if (event->modifiers() == Qt::ControlModifier) {
+        zoomFont(event);
+    }
+}
+
+void ResultsDisassemblyPage::zoomFont(QWheelEvent *event)
+{
+    QFont curFont = this->font();
+    curFont.setPointSize(curFont.pointSize() + event->delta() / 100);
+
+    int fontSize = (curFont.pointSize() / (double) m_origFontSize) * 100;
+    this->setFont(curFont);
+    this->setToolTip(QLatin1String("Zoom: ") + QString::number(fontSize) + QLatin1String("%"));
+
+    QFont textEditFont = curFont;
+    textEditFont.setPointSize(m_origFontSize);
+}
 
 void ResultsDisassemblyPage::filterDisassemblyBytes(bool filtered)
 {
@@ -112,7 +137,6 @@ void ResultsDisassemblyPage::showDisassembly()
     // Show empty tab when selected symbol is not valid
     if (m_curSymbol.symbol.isEmpty()) {
         clear();
-        return;
     }
 
     // Call objdump with arguments: addresses range and binary file
@@ -120,9 +144,48 @@ void ResultsDisassemblyPage::showDisassembly()
     QStringList arguments;
     arguments << QLatin1String("-d") << QLatin1String("--start-address") << QLatin1String("0x") + QString::number(m_curSymbol.relAddr, 16) <<
             QLatin1String("--stop-address") << QLatin1String("0x") + QString::number(m_curSymbol.relAddr + m_curSymbol.size, 16) <<
-            m_curSymbol.path;
+            m_curAppPath;
 
     showDisassembly(processName, arguments);
+}
+
+QByteArray ResultsDisassemblyPage::processDisassemblyGenRun(QString processName, QStringList arguments)
+{
+    QByteArray processOutput = QByteArray();
+    if (m_curSymbol.symbol.isEmpty()) {
+        processOutput = "Empty symbol ?? is selected";
+    } else {
+        QProcess asmProcess;
+        asmProcess.start(processName, arguments);
+
+        bool started = asmProcess.waitForStarted();
+        bool finished = asmProcess.waitForFinished();
+        if (!started || !finished) {
+            if (!started) {
+                if (!m_arch.startsWith(QLatin1String("arm"))) {
+                    processOutput = QByteArray(
+                            "Process was not started. Probably command 'objdump' not found, but can be installed with 'apt install binutils'");
+                } else {
+                    if (m_arch.startsWith(QLatin1String("armv8")))
+                        processOutput = QByteArray(
+                                "Process was not started. Probably command 'aarch64-linux-gnu-objdump' not found, but can be installed with 'apt install binutils-aarch64-linux-gnu'");
+                    else
+                        processOutput = QByteArray(
+                                "Process was not started. Probably command 'arm-linux-gnueabi-objdump' not found, but can be installed with 'apt install binutils-arm-linux-gnueabi'");
+                }
+            } else {
+                return processOutput;
+            }
+        } else {
+            processOutput = asmProcess.readAllStandardOutput();
+        }
+
+        if (processOutput.isEmpty()) {
+            processOutput = QByteArray("Empty output of command ");
+            processOutput += processName.toUtf8();
+        }
+    }
+    return processOutput;
 }
 
 void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList arguments)
@@ -137,13 +200,8 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
     QProcess asmProcess;
 
     if (m_tmpFile.open()) {
-        asmProcess.start(processName, arguments);
-
-        if (!asmProcess.waitForStarted() || !asmProcess.waitForFinished()) {
-            return;
-        }
         QTextStream stream(&m_tmpFile);
-        stream << asmProcess.readAllStandardOutput();
+        stream << processDisassemblyGenRun(processName, arguments);
         m_tmpFile.close();
     }
 
@@ -216,6 +274,7 @@ void ResultsDisassemblyPage::setSymbol(const Data::Symbol &symbol)
     if (m_curSymbol.symbol.isEmpty()) {
         return;
     }
+    m_curAppPath = m_curSymbol.actualPath;
 }
 
 void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
