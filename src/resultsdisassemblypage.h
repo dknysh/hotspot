@@ -33,6 +33,7 @@
 #include <QStack>
 #include "data.h"
 #include "models/searchdelegate.h"
+#include "models/disassemblymodel.h"
 #include <QItemSelection>
 
 class QMenu;
