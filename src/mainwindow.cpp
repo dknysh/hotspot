@@ -31,6 +31,8 @@
 #include "settings.h"
 #include "startpage.h"
 #include "ui_mainwindow.h"
+#include "settingsdialog.h"
+#include "ui_settingsdialog.h"
 
 #include <QApplication>
 #include <QFileDialog>
@@ -121,6 +123,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect(this, &MainWindow::sysrootChanged, m_resultsPage, &ResultsPage::setSysroot);
     connect(this, &MainWindow::appPathChanged, m_resultsPage, &ResultsPage::setAppPath);
+    connect(m_startPage, &StartPage::pathsAndArchSettingsButtonClicked, this, &MainWindow::onPathsAndArchSettingsButtonClicked);
 
     connect(m_startPage, &StartPage::openFileButtonClicked, this, &MainWindow::onOpenFileButtonClicked);
     connect(m_startPage, &StartPage::recordButtonClicked, this, &MainWindow::onRecordButtonClicked);
@@ -155,6 +158,7 @@ MainWindow::MainWindow(QWidget* parent)
     ui->fileMenu->addAction(KStandardAction::quit(this, SLOT(close()), this));
     connect(ui->actionAbout_Qt, &QAction::triggered, qApp, &QApplication::aboutQt);
     connect(ui->actionAbout_KDAB, &QAction::triggered, this, &MainWindow::aboutKDAB);
+    connect(ui->actionPathsAndArchSettingsWindow, &QAction::triggered, this, &MainWindow::openSettingsDialog);
     connect(ui->actionAbout_Hotspot, &QAction::triggered, this, &MainWindow::aboutHotspot);
 
     {
@@ -244,6 +248,30 @@ void MainWindow::setArch(const QString& arch)
     emit archChanged(m_arch);
 }
 
+QString MainWindow::getSysroot() const {
+    return m_sysroot;
+}
+
+QString MainWindow::getApplicationPath() const {
+    return m_appPath;
+}
+
+QString MainWindow::getExtraLibPaths() const {
+    return m_extraLibPaths;
+}
+
+QString MainWindow::getDebugPaths() const {
+    return m_debugPaths;
+}
+
+QString MainWindow::getKallsyms() const {
+   return m_kallsyms;
+}
+
+QString MainWindow::getArch() const {
+    return m_arch;
+}
+
 void MainWindow::onOpenFileButtonClicked()
 {
     const auto fileName = QFileDialog::getOpenFileName(this, tr("Open File"), QDir::currentPath(),
@@ -253,6 +281,11 @@ void MainWindow::onOpenFileButtonClicked()
     }
 
     openFile(fileName);
+}
+
+void MainWindow::onPathsAndArchSettingsButtonClicked()
+{
+    openSettingsDialog();
 }
 
 void MainWindow::onHomeButtonClicked()
@@ -345,6 +378,14 @@ void MainWindow::aboutKDAB()
     dialog.setWindowIcon(QIcon(QStringLiteral(":/images/kdablogo.png")));
     dialog.adjustSize();
     dialog.exec();
+}
+
+void MainWindow::openSettingsDialog() {
+    SettingsDialog* dialog = new SettingsDialog(this);
+    dialog->setWindowTitle(tr("Paths and Architecture Settings"));
+    dialog->setWindowIcon(QPixmap(QStringLiteral(":/images/kdablogo.png")));
+    dialog->adjustSize();
+    dialog->exec();
 }
 
 void MainWindow::aboutHotspot()
