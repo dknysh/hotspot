@@ -53,7 +53,7 @@
 #include <QStandardItemModel>
 
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
-        : QWidget(parent), ui(new Ui::ResultsDisassemblyPage) {
+        : QWidget(parent), ui(new Ui::ResultsDisassemblyPage), m_noShowRawInsn(true), m_noShowAddress(false), m_intelSyntaxDisassembly(false) {
     ui->setupUi(this);
 
     connect(ui->asmView, &QAbstractItemView::doubleClicked, this,
@@ -62,6 +62,28 @@ ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, 
 
 ResultsDisassemblyPage::~ResultsDisassemblyPage() = default;
 
+void ResultsDisassemblyPage::filterDisassemblyBytes(bool filtered) {
+    setNoShowRawInsn(filtered);
+    showDisassembly();
+}
+
+void ResultsDisassemblyPage::filterDisassemblyAddress(bool filtered) {
+    setNoShowAddress(filtered);
+    showDisassembly();
+}
+
+/**
+ *
+ * @param intelSyntax
+ */
+void ResultsDisassemblyPage::switchOnIntelSyntax(bool intelSyntax) {
+    setIntelSyntaxDisassembly(intelSyntax);
+    showDisassembly();
+}
+
+/**
+ *  Clear
+ */
 void ResultsDisassemblyPage::clear() {
     if (ui->asmView->model() == nullptr) return;
 
@@ -100,6 +122,12 @@ void ResultsDisassemblyPage::showDisassembly() {
 }
 
 void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList arguments) {
+    if (m_noShowRawInsn)
+        arguments << QLatin1String("--no-show-raw-insn");
+
+    if (m_intelSyntaxDisassembly)
+        arguments <<  QLatin1String("-M intel ");
+
     QTemporaryFile m_tmpFile;
     QProcess asmProcess;
 
@@ -134,6 +162,13 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
             QString addrLine = asmTokens.value(0);
             QString costLine = QString();
 
+            if (m_noShowAddress) {
+                QRegExp hexMatcher(QLatin1String("[0-9A-F]+$"), Qt::CaseInsensitive);
+                if (hexMatcher.exactMatch(addrLine.trimmed())) {
+                    asmTokens.removeFirst();
+                    asmLine = asmTokens.join(QLatin1Char(':')).trimmed();
+                }
+            }
             QStandardItem *asmItem = new QStandardItem();
             asmItem->setText(asmLine);
             model->setItem(row, 0, asmItem);
@@ -192,27 +227,16 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data) {
     }
 }
 
-/**
- * Clear call stack when another symbol was selected
- */
 void ResultsDisassemblyPage::resetCallStack() {
     m_callStack.clear();
 }
 
-/**
- *  Auxilary method to extract relative address of selected 'call' instruction and it's name
- */
 void calcFunction(QString asmLineCall, QString *offset, QString *symName) {
     QStringList sym = asmLineCall.trimmed().split(QLatin1Char('<'));
     *offset = sym[0].trimmed();
     *symName = sym[1].replace(QLatin1Char('>'), QLatin1String(""));
 }
 
-/**
- *  Slot method for double click on 'call' or 'return' instructions
- *  We show it's Disassembly by double click on 'call' instruction
- *  And we go back by double click on 'return'
- */
 void ResultsDisassemblyPage::jumpToAsmCallee(QModelIndex index) {
     QStandardItem *asmItem = model->takeItem(index.row(), 0);
     QString opCodeCall = m_arch.startsWith(QLatin1String("arm")) ? QLatin1String("bl") : QLatin1String("callq");
@@ -244,4 +268,16 @@ void ResultsDisassemblyPage::jumpToAsmCallee(QModelIndex index) {
         }
     }
     showDisassembly();
+}
+
+void ResultsDisassemblyPage::setNoShowRawInsn(bool noShowRawInsn) {
+    m_noShowRawInsn = noShowRawInsn;
+}
+
+void ResultsDisassemblyPage::setNoShowAddress(bool noShowAddress) {
+    m_noShowAddress = noShowAddress;
+}
+
+void ResultsDisassemblyPage::setIntelSyntaxDisassembly(bool intelSyntax) {
+    m_intelSyntaxDisassembly = intelSyntax;
 }

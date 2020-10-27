@@ -101,6 +101,8 @@ private:
     void closeEvent(QCloseEvent* event) override;
     void setupCodeNavigationMenu();
     void setupPathSettingsMenu();
+    void setupFilterDisassemblyMenu();
+    void setupViewMenu();
 
     QScopedPointer<Ui::MainWindow> ui;
     PerfParser* m_parser;
