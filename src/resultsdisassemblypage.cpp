@@ -64,7 +64,7 @@ ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, 
 
     ui->searchTextEdit->setPlaceholderText(QLatin1String("Search"));
     ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
-
+    ResultsUtil::setupDisassemblyContextMenu(ui->asmView);
     connect(ui->asmView, &QAbstractItemView::doubleClicked, this, &ResultsDisassemblyPage::jumpToAsmCallee);
     m_origFontSize = this->font().pointSize();
     m_filterAndZoomStack = filterStack;
