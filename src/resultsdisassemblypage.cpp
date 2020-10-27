@@ -47,24 +47,65 @@
 
 #include "models/filterandzoomstack.h"
 #include "models/costdelegate.h"
-#include "models/hashmodel.h"
+#include "models/searchdelegate.h"
 #include "models/topproxy.h"
 #include "models/treemodel.h"
 
 #include <QStandardItemModel>
 #include <QWheelEvent>
 #include <QToolTip>
+#include <QTextEdit>
+#include <QShortcut>
 
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
         : QWidget(parent), ui(new Ui::ResultsDisassemblyPage), m_noShowRawInsn(true), m_noShowAddress(false), m_intelSyntaxDisassembly(false) {
     ui->setupUi(this);
 
+    ui->searchTextEdit->setPlaceholderText(QLatin1String("Search"));
+    ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
+
     connect(ui->asmView, &QAbstractItemView::doubleClicked, this, &ResultsDisassemblyPage::jumpToAsmCallee);
     m_origFontSize = this->font().pointSize();
     m_filterAndZoomStack = filterStack;
+
+    m_searchDelegate = new SearchDelegate(ui->asmView);
+    ui->asmView->setItemDelegate(m_searchDelegate);
+
+    connect(ui->searchTextEdit, &QTextEdit::textChanged, this, &ResultsDisassemblyPage::searchTextAndHighlight);
+
+    connect(ui->asmView, &QAbstractItemView::clicked, this, &ResultsDisassemblyPage::onItemClicked);
+
+    auto shortcut = new QShortcut(QKeySequence(QLatin1String("Ctrl+A")), ui->asmView);
+    QObject::connect(shortcut, &QShortcut::activated, [this]() {
+        this->selectAll();
+    });
 }
 
 ResultsDisassemblyPage::~ResultsDisassemblyPage() = default;
+
+void ResultsDisassemblyPage::selectAll()
+{
+    ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
+    ui->asmView->selectAll();
+    m_searchDelegate->setSelectedIndexes(ui->asmView->selectionModel()->selectedIndexes());
+    emit model->dataChanged(QModelIndex(), QModelIndex());
+}
+
+void ResultsDisassemblyPage::onItemClicked(const QModelIndex &index)
+{
+    ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
+    m_searchDelegate->setSelectedIndexes(ui->asmView->selectionModel()->selectedIndexes());
+    emit model->dataChanged(QModelIndex(), QModelIndex());
+}
+
+void ResultsDisassemblyPage::searchTextAndHighlight() {
+    ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::SingleSelection);
+    ui->asmView->setAllColumnsShowFocus(true);
+
+    QString text = ui->searchTextEdit->toPlainText();
+    m_searchDelegate->setSearchText(text);
+    emit model->dataChanged(QModelIndex(), QModelIndex());
+}
 
 void ResultsDisassemblyPage::wheelEvent(QWheelEvent *event) {
     if (event->modifiers() == Qt::ControlModifier) {
@@ -82,6 +123,7 @@ void ResultsDisassemblyPage::zoomFont(QWheelEvent *event) {
 
     QFont textEditFont = curFont;
     textEditFont.setPointSize(m_origFontSize);
+    ui->searchTextEdit->setFont(textEditFont);
 }
 
 void ResultsDisassemblyPage::filterDisassemblyBytes(bool filtered) {
@@ -150,7 +192,7 @@ QByteArray ResultsDisassemblyPage::processDisassemblyGenRun(QString processName,
                 if (!m_arch.startsWith(QLatin1String("arm"))) {
                     processOutput = QByteArray(
                             "Process was not started. Probably command 'objdump' not found, but can be installed with 'apt install binutils'");
-                } else {                    
+                } else {
                     if (m_arch.startsWith(QLatin1String("armv8")))
                         processOutput = QByteArray(
                                 "Process was not started. Probably command 'aarch64-linux-gnu-objdump' not found, but can be installed with 'apt install binutils-aarch64-linux-gnu'");

@@ -4,6 +4,7 @@ add_library(models STATIC
     data.cpp
     callercalleemodel.cpp
     costdelegate.cpp
+    searchdelegate.cpp
     processmodel.cpp
     processfiltermodel.cpp
     processlist_unix.cpp
