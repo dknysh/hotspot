@@ -1190,7 +1190,7 @@ public:
         summaryResult.totalMemoryInKiB = features.totalMem;
 
         eventResult.cpus.resize(features.nrCpusAvailable);
-        m_arch = QString::fromUtf8(features.arch);
+        disassemblyResult.arch = QString::fromUtf8(features.arch);
     }
 
     void addError(const Error& error)
@@ -1255,7 +1255,6 @@ public:
     QHash<int, qint32> attributeNameToCostIds;
     qint32 m_nextCostId = 0;
     qint32 m_schedSwitchCostId = -1;
-    QString m_arch;
 
 public slots:
     void stop()
@@ -1360,7 +1359,6 @@ void PerfParser::startParseFile(const QString& path, const QString& sysroot, con
     using namespace ThreadWeaver;
     stream() << make_job([parserBinary, parserArgs, this]() {
         PerfParserPrivate d;
-        d.disassemblyResult = m_disassemblyResult;
         connect(&d, &PerfParserPrivate::progress, this, &PerfParser::progress);
         connect(this, &PerfParser::stopRequested, &d, &PerfParserPrivate::stop);
 
@@ -1370,6 +1368,7 @@ void PerfParser::startParseFile(const QString& path, const QString& sysroot, con
             }
         });
 
+        d.disassemblyResult = m_disassemblyResult;
         connect(&d.process, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), &d.process,
                 [&d, this](int exitCode, QProcess::ExitStatus exitStatus) {
                     if (m_stopRequested) {
