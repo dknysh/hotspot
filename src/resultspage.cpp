@@ -270,6 +270,19 @@ void ResultsPage::clear()
     m_filterAndZoomStack->clear();
 }
 
+void ResultsPage::filterDisassemblyBytes(bool filtered)
+{
+    m_resultsDisassemblyPage->filterDisassemblyBytes(filtered);
+}
+
+void ResultsPage::filterDisassemblyAddress(bool filtered) {
+    m_resultsDisassemblyPage->filterDisassemblyAddress(filtered);
+}
+
+void ResultsPage::switchOnIntelSyntax(bool intelSyntax) {
+    m_resultsDisassemblyPage->switchOnIntelSyntax(intelSyntax);
+}
+
 QMenu* ResultsPage::filterMenu() const
 {
     return m_filterMenu;

@@ -55,6 +55,9 @@
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
         : QWidget(parent)
         , ui(new Ui::ResultsDisassemblyPage)
+        , m_noShowRawInsn(true)
+        , m_noShowAddress(false)
+        , m_intelSyntaxDisassembly(false)
 {
     ui->setupUi(this);
 
@@ -62,6 +65,24 @@ ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, 
 }
 
 ResultsDisassemblyPage::~ResultsDisassemblyPage() = default;
+
+void ResultsDisassemblyPage::filterDisassemblyBytes(bool filtered)
+{
+    setNoShowRawInsn(filtered);
+    showDisassembly();
+}
+
+void ResultsDisassemblyPage::filterDisassemblyAddress(bool filtered)
+{
+    setNoShowAddress(filtered);
+    showDisassembly();
+}
+
+void ResultsDisassemblyPage::switchOnIntelSyntax(bool intelSyntax)
+{
+    setIntelSyntaxDisassembly(intelSyntax);
+    showDisassembly();
+}
 
 void ResultsDisassemblyPage::clear()
 {
@@ -106,6 +127,12 @@ void ResultsDisassemblyPage::showDisassembly()
 
 void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList arguments)
 {
+    if (m_noShowRawInsn)
+        arguments << QLatin1String("--no-show-raw-insn");
+
+    if (m_intelSyntaxDisassembly)
+        arguments <<  QLatin1String("-M intel ");
+
     QTemporaryFile m_tmpFile;
     QProcess asmProcess;
 
@@ -140,6 +167,13 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
             QString addrLine = asmTokens.value(0);
             QString costLine = QString();
 
+            if (m_noShowAddress) {
+                QRegExp hexMatcher(QLatin1String("[0-9A-F]+$"), Qt::CaseInsensitive);
+                if (hexMatcher.exactMatch(addrLine.trimmed())) {
+                    asmTokens.removeFirst();
+                    asmLine = asmTokens.join(QLatin1Char(':')).trimmed();
+                }
+            }
             QStandardItem *asmItem = new QStandardItem();
             asmItem->setText(asmLine);
             model->setItem(row, 0, asmItem);
@@ -243,4 +277,19 @@ void ResultsDisassemblyPage::jumpToAsmCallee(QModelIndex index)
         }
     }
     showDisassembly();
+}
+
+void ResultsDisassemblyPage::setNoShowRawInsn(bool noShowRawInsn)
+{
+    m_noShowRawInsn = noShowRawInsn;
+}
+
+void ResultsDisassemblyPage::setNoShowAddress(bool noShowAddress)
+{
+    m_noShowAddress = noShowAddress;
+}
+
+void ResultsDisassemblyPage::setIntelSyntaxDisassembly(bool intelSyntax)
+{
+    m_intelSyntaxDisassembly = intelSyntax;
 }
