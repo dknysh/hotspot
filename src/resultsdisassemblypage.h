@@ -1,10 +1,10 @@
 /*
-  resultssummarypage.h
+  resultsdisassemblypage.h
 
   This file is part of Hotspot, the Qt GUI for performance analysis.
 
   Copyright (C) 2017-2020 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com
-  Author: Nate Rogers <nate.rogers@kdab.com>
+  Author: Darya Knysh <d.knysh@nips.ru>
 
   Licensees holding valid commercial KDAB Hotspot licenses may use this file in
   accordance with Hotspot Commercial License Agreement provided with the Software.
@@ -28,30 +28,52 @@
 #pragma once
 
 #include <QWidget>
+#include <QTemporaryFile>
+#include "data.h"
+
+class QMenu;
+
+namespace Ui {
+class ResultsDisassemblyPage;
+}
 
 namespace Data {
 struct Symbol;
 }
 
-namespace Ui {
-class ResultsSummaryPage;
-}
+class QTreeView;
 
 class PerfParser;
 class FilterAndZoomStack;
 
-class ResultsSummaryPage : public QWidget
+class ResultsDisassemblyPage : public QWidget
 {
     Q_OBJECT
 public:
-    explicit ResultsSummaryPage(FilterAndZoomStack* filterStack, PerfParser* parser, QWidget* parent = nullptr);
-    ~ResultsSummaryPage();
+    explicit ResultsDisassemblyPage(FilterAndZoomStack* filterStack, PerfParser* parser,
+                                 QWidget* parent = nullptr);
+    ~ResultsDisassemblyPage();
 
-signals:
-    void jumpToCallerCallee(const Data::Symbol& symbol);
-    void openEditor(const Data::Symbol& symbol);
-    void jumpToDisassembly(const Data::Symbol& symbol);
+    void clear();
+    void showDisassembly();
+    // Output Disassembly that is the result of call process running 'processName' command on tab Disassembly
+    void showDisassembly(QString processName, QStringList arguments);
+    void setAppPath(const QString& path);
+    void setSymbol(const Data::Symbol& data);
+    void setData(const Data::DisassemblyResult& data);
 
 private:
-    QScopedPointer<Ui::ResultsSummaryPage> ui;
+    QScopedPointer<Ui::ResultsDisassemblyPage> ui;
+    // Perf.data path
+    QString m_perfDataPath;
+    // Current chosen function symbol
+    Data::Symbol m_curSymbol;
+    // Application path
+    QString m_appPath;
+    // Extra libs path
+    QString m_extraLibPaths;
+    // Architecture
+    QString m_arch;
+    // Objdump binary name
+    QString m_objdump;
 };

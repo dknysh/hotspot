@@ -55,6 +55,7 @@ signals:
     void topDownDataAvailable(const Data::TopDownResults& data);
     void callerCalleeDataAvailable(const Data::CallerCalleeResults& data);
     void eventsAvailable(const Data::EventResults& events);
+    void disassemblyDataAvailable(const Data::DisassemblyResult& disassemblyResult);
     void parsingFinished();
     void parsingFailed(const QString& errorMessage);
     void progress(float progress);
@@ -64,6 +65,7 @@ private:
     // only set once after the initial startParseFile finished
     Data::BottomUpResults m_bottomUpResults;
     Data::CallerCalleeResults m_callerCalleeResults;
+    Data::DisassemblyResult m_disassemblyResult;
     Data::EventResults m_events;
     std::atomic<bool> m_isParsing;
     std::atomic<bool> m_stopRequested;
