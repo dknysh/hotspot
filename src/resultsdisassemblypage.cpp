@@ -46,6 +46,7 @@
 #include "resultsutil.h"
 
 #include "models/costdelegate.h"
+#include "models/disassemblymodel.h"
 #include "models/filterandzoomstack.h"
 #include "models/searchdelegate.h"
 #include "models/topproxy.h"
@@ -248,7 +249,7 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
 
     if (m_tmpFile.open()) {
         int row = 0;
-        model = new QStandardItemModel();
+        model = new DisassemblyModel();
 
         QStringList headerList;
         headerList.append(QLatin1String("Assembly"));
@@ -299,7 +300,6 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
                     : QString();
 
                 QStandardItem* costItem = new QStandardItem(costLine);
-                costItem->setForeground(Qt::red);
                 model->setItem(row, event + 1, costItem);
             }
             row++;

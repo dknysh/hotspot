@@ -28,6 +28,7 @@
 #pragma once
 
 #include "data.h"
+#include "models/disassemblymodel.h"
 #include "models/searchdelegate.h"
 #include <QItemSelection>
 #include <QStack>

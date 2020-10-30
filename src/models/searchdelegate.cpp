@@ -27,6 +27,7 @@
 
 #include "searchdelegate.h"
 #include "costdelegate.h"
+#include "disassemblymodel.h"
 
 #include <QDebug>
 #include <QPainter>
@@ -39,7 +40,7 @@
 SearchDelegate::SearchDelegate(QObject* parent)
     : QStyledItemDelegate(parent)
 {
-    costDelegate = new CostDelegate(0, 0, parent);
+    costDelegate = new CostDelegate(SortRole, TotalCostRole, parent);
 }
 
 SearchDelegate::~SearchDelegate() = default;
