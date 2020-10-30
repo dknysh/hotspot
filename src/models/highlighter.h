@@ -1,5 +1,5 @@
 /*
-  searchdelegate.h
+  highlighter.h
 
   This file is part of Hotspot, the Qt GUI for performance analysis.
 
@@ -25,31 +25,23 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#pragma once
+#ifndef HIGHLIGHTER_H
+#define HIGHLIGHTER_H
 
-#include "costdelegate.h"
-#include "highlighter.h"
-#include <QStyledItemDelegate>
+#include <QSyntaxHighlighter>
+#include <QTextCharFormat>
+#include <QRegularExpression>
 
-class SearchDelegate : public QStyledItemDelegate
-{
-    Q_OBJECT
+QT_BEGIN_NAMESPACE
+class QTextDocument;
+
+QT_END_NAMESPACE
+
+class Highlighter : public QSyntaxHighlighter {
+Q_OBJECT
+
 public:
-    SearchDelegate(QObject* parent = nullptr);
-
-    ~SearchDelegate();
-
-    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
-
-    void setSearchText(QString text)
-    {
-        m_searchText = text;
-    }
-
-    QString getSearchText()
-    {
-        return m_searchText;
-    }
+    Highlighter(QTextDocument *parent = 0);
 
     void setArch(QString arch) {
         m_arch = arch;
@@ -59,14 +51,20 @@ public:
         return m_arch;
     }
 
-    const QModelIndexList getSelectedIndexes() const
-    {
-        return selectedIndexes;
+    void setSearchText(QString searchText) {
+        m_searchText = searchText;
     }
 
-    void setSelectedIndexes(const QModelIndexList& selectedIndexes)
-    {
-        SearchDelegate::selectedIndexes = selectedIndexes;
+    QString getSearchText() {
+        return m_searchText;
+    }
+
+    void setHighlightColor(QBrush highlightColor) {
+        m_highlightColor = highlightColor;
+    }
+
+    QBrush getHighlightColor() {
+        return m_highlightColor;
     }
 
     void setDiagnosticStyle(bool diagnosticStyle) {
@@ -77,10 +75,31 @@ public:
         return m_diagnosticStyle;
     }
 
+protected:
+    void highlightBlock(const QString &text) override;
+
 private:
-    QString m_searchText;
-    QModelIndexList selectedIndexes;
-    CostDelegate *costDelegate;
+    struct HighlightingRule {
+        QRegularExpression pattern;
+        QTextCharFormat format;
+    };
+    QVector<HighlightingRule> regHighlightingRules;    
+    QVector<HighlightingRule> callHighlightingRules;
+    QVector<HighlightingRule> offsetHighlightingRules;
+
+    QVector<HighlightingRule> searchHighlightingRules;
+    QVector<HighlightingRule> commentHighlightingRules;
+
+    QTextCharFormat registersFormat;
+    QTextCharFormat offsetFormat;
+    QTextCharFormat callFormat;
+    QTextCharFormat searchFormat;
+    QTextCharFormat commentFormat;
+
     QString m_arch;
+    QString m_searchText;
+    QBrush m_highlightColor;
     bool m_diagnosticStyle;
 };
+
+#endif
