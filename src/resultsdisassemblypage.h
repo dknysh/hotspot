@@ -27,9 +27,10 @@
 
 #pragma once
 
-#include <QWidget>
-#include <QTemporaryFile>
 #include "data.h"
+#include <QStandardItemModel>
+#include <QTemporaryFile>
+#include <QWidget>
 
 class QMenu;
 
@@ -55,6 +56,7 @@ public:
     ~ResultsDisassemblyPage();
 
     void clear();
+    void setAsmViewModel(QStandardItemModel* model, int numTypes);
     void showDisassembly();
     // Output Disassembly that is the result of call process running 'processName' command on tab Disassembly
     void showDisassembly(QString processName, QStringList arguments);
@@ -76,4 +78,6 @@ private:
     QString m_arch;
     // Objdump binary name
     QString m_objdump;
+    // Map of symbols and its locations with costs
+    Data::DisassemblyResult m_disasmResult;
 };
