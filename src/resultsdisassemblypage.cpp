@@ -45,15 +45,17 @@
 #include "parsers/perf/perfparser.h"
 #include "resultsutil.h"
 
-#include "models/filterandzoomstack.h"
 #include "models/costdelegate.h"
-#include "models/hashmodel.h"
+#include "models/filterandzoomstack.h"
+#include "models/searchdelegate.h"
 #include "models/topproxy.h"
 #include "models/treemodel.h"
 
+#include <QShortcut>
 #include <QStandardItemModel>
-#include <QWheelEvent>
+#include <QTextEdit>
 #include <QToolTip>
+#include <QWheelEvent>
 
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
         : QWidget(parent)
@@ -64,12 +66,50 @@ ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, 
 {
     ui->setupUi(this);
 
+    ui->searchTextEdit->setPlaceholderText(QLatin1String("Search"));
+    ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
+
     connect(ui->asmView, &QAbstractItemView::doubleClicked, this, &ResultsDisassemblyPage::jumpToAsmCallee);
     m_origFontSize = this->font().pointSize();
     m_filterAndZoomStack = filterStack;
+
+    m_searchDelegate = new SearchDelegate(ui->asmView);
+    ui->asmView->setItemDelegate(m_searchDelegate);
+
+    connect(ui->searchTextEdit, &QTextEdit::textChanged, this, &ResultsDisassemblyPage::searchTextAndHighlight);
+
+    connect(ui->asmView, &QAbstractItemView::clicked, this, &ResultsDisassemblyPage::onItemClicked);
+
+    auto shortcut = new QShortcut(QKeySequence(QLatin1String("Ctrl+A")), ui->asmView);
+    QObject::connect(shortcut, &QShortcut::activated, [this]() { this->selectAll(); });
 }
 
 ResultsDisassemblyPage::~ResultsDisassemblyPage() = default;
+
+void ResultsDisassemblyPage::selectAll()
+{
+    ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
+    ui->asmView->selectAll();
+    m_searchDelegate->setSelectedIndexes(ui->asmView->selectionModel()->selectedIndexes());
+    emit model->dataChanged(QModelIndex(), QModelIndex());
+}
+
+void ResultsDisassemblyPage::onItemClicked(const QModelIndex& index)
+{
+    ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
+    m_searchDelegate->setSelectedIndexes(ui->asmView->selectionModel()->selectedIndexes());
+    emit model->dataChanged(QModelIndex(), QModelIndex());
+}
+
+void ResultsDisassemblyPage::searchTextAndHighlight()
+{
+    ui->asmView->setSelectionMode(QAbstractItemView::SelectionMode::SingleSelection);
+    ui->asmView->setAllColumnsShowFocus(true);
+
+    QString text = ui->searchTextEdit->toPlainText();
+    m_searchDelegate->setSearchText(text);
+    emit model->dataChanged(QModelIndex(), QModelIndex());
+}
 
 void ResultsDisassemblyPage::wheelEvent(QWheelEvent *event)
 {
@@ -89,6 +129,7 @@ void ResultsDisassemblyPage::zoomFont(QWheelEvent *event)
 
     QFont textEditFont = curFont;
     textEditFont.setPointSize(m_origFontSize);
+    ui->searchTextEdit->setFont(textEditFont);
 }
 
 void ResultsDisassemblyPage::filterDisassemblyBytes(bool filtered)

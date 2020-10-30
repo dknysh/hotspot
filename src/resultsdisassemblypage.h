@@ -28,6 +28,8 @@
 #pragma once
 
 #include "data.h"
+#include "models/searchdelegate.h"
+#include <QItemSelection>
 #include <QStack>
 #include <QStandardItemModel>
 #include <QTemporaryFile>
@@ -71,6 +73,9 @@ public:
     void resetCallStack();
     void zoomFont(QWheelEvent *event);
     void wheelEvent(QWheelEvent *event);
+    void searchTextAndHighlight();
+    void onItemClicked(const QModelIndex& index);
+    void selectAll();
 
 signals:
     void doubleClicked(QModelIndex);
@@ -110,6 +115,8 @@ private:
     int m_origFontSize;
     // Version of objdump
     QString m_objdumpVersion;
+    // Search delegate
+    SearchDelegate* m_searchDelegate;
     // Setter for m_noShowRawInsn
     void setNoShowRawInsn(bool noShowRawInsn);
     // Setter for m_noShowAddress
