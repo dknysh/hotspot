@@ -558,6 +558,9 @@ struct SymbolCount {
 void addDisassemblyEvent(const Data::Symbol& symbol, const Data::Location& location, int type, quint64 cost,
                          QSet<Data::Symbol>* recursionGuard, Data::DisassemblyResult* disassemblyResult, int numCosts)
 {
+    if (symbol.size > 0 && location.relAddr > symbol.relAddr + symbol.size) {
+        return;
+    }
     auto recursionIt = recursionGuard->find(symbol);
     if (recursionIt == recursionGuard->end()) {
         auto& entry = disassemblyResult->entry(symbol);
