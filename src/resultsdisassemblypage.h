@@ -55,8 +55,7 @@ class ResultsDisassemblyPage : public QWidget
 {
     Q_OBJECT
 public:
-    explicit ResultsDisassemblyPage(FilterAndZoomStack* filterStack, PerfParser* parser,
-                                 QWidget* parent = nullptr);
+    explicit ResultsDisassemblyPage(FilterAndZoomStack* filterStack, QWidget* parent = nullptr);
     ~ResultsDisassemblyPage();
 
     void clear();
@@ -75,13 +74,21 @@ public:
     void zoomFont(QWheelEvent *event);
     void wheelEvent(QWheelEvent *event);
     void searchTextAndHighlight();
-    void onItemClicked(const QModelIndex& index);
-    void selectAll();
-
+    Data::Symbol getCalleeSymbol(QString asmLine);
+    void returnToCaller();
+    void returnToJump();
+    void setupDisassemblyContextMenu(QTreeView *view, int origFontSize);
+    void setOpcodes(bool intelSyntax);
+    void navigateToAddressInstruction(QModelIndex index, QString asmLine);
+    void resizeEvent(QResizeEvent *event) override;
+    int selectedRow();
+    void selectRow(int row);
 signals:
     void doubleClicked(QModelIndex);
 public slots:
     void jumpToAsmCallee(QModelIndex);
+    void backButtonClicked();
+    void blockBackButton();
 
 private:
     FilterAndZoomStack* m_filterAndZoomStack;
@@ -89,7 +96,7 @@ private:
     // Asm view model
     QStandardItemModel* model;
     // Call stack
-    QStack<Data::Symbol> m_callStack;
+    QStack<QMap<Data::Symbol, int>> m_callStack;
     // Perf.data path
     QString m_perfDataPath;
     // Current chosen function symbol
@@ -117,7 +124,17 @@ private:
     // Version of objdump
     QString m_objdumpVersion;
     // Search delegate
-    SearchDelegate* m_searchDelegate;
+    SearchDelegate *m_searchDelegate;
+    // Map of Callees which can be Disassemblied
+    QHash<int, Data::Symbol> m_callees;
+    // Opcode of call
+    QString opCodeCall;
+    // Opcode of return
+    QString opCodeReturn;
+    // m_callees should be filled once for selected symbol
+    bool m_calleesProcessed;
+    // Jump instruction source
+    QStack<int> m_addressStack;
     // Setter for m_noShowRawInsn
     void setNoShowRawInsn(bool noShowRawInsn);
     // Setter for m_noShowAddress

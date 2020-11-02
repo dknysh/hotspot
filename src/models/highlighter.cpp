@@ -28,7 +28,8 @@
 #include "highlighter.h"
 
 Highlighter::Highlighter(QTextDocument *parent)
-        : QSyntaxHighlighter(parent) {
+        : QSyntaxHighlighter(parent),
+          m_callee(false) {
     HighlightingRule rule;
 
     QColor greenColor(60, 138, 103);
@@ -54,18 +55,6 @@ Highlighter::Highlighter(QTextDocument *parent)
         rule.format = offsetFormat;
         offsetHighlightingRules.append(rule);
     }
-
-    QColor magentaColor(153, 0, 153);
-    callFormat.setForeground(magentaColor);
-    const QString callPatterns[] = {
-            QLatin1String("[a-z0-9]+\\s*<"),
-            QLatin1String("\\>")
-    };
-    for (const QString &pattern : callPatterns) {
-        rule.pattern = QRegularExpression(pattern);
-        rule.format = callFormat;
-        callHighlightingRules.append(rule);
-    }
 }
 
 /**
@@ -82,7 +71,7 @@ void Highlighter::highlightBlock(const QString &text) {
     searchFormat.setForeground(Qt::white);
     searchFormat.setBackground(m_highlightColor);
     const QString searchPatterns[] = {
-            QRegularExpression::escape(m_searchText)
+        QRegularExpression::escape(m_searchText)
     };
     for (const QString &pattern : searchPatterns) {
         rule.pattern = QRegularExpression(pattern);
@@ -90,10 +79,25 @@ void Highlighter::highlightBlock(const QString &text) {
         searchHighlightingRules.append(rule);
     }
 
+    QString opCodeCall = m_arch.startsWith(QLatin1String("arm")) ? QLatin1String("bl") : QLatin1String("call");
+    QColor magentaColor(153, 0, 153);
+    callFormat.setForeground((m_callee) ? Qt::blue : magentaColor);
+
+    const QString callPatterns[] = {
+            (m_callee) ? opCodeCall.append(QLatin1String("q{0,1}\\s*[a-z0-9]+\\s*<")) : QLatin1String("[a-z0-9]+\\s*<"),
+            QLatin1String("\\>")
+    };
+
+    for (const QString &pattern : callPatterns) {
+        rule.pattern = QRegularExpression(pattern);
+        rule.format = callFormat;
+        callHighlightingRules.append(rule);
+    }
+
     if (!m_diagnosticStyle) {
         QString commentSymbol = m_arch.startsWith(QLatin1String("arm")) ? QLatin1String(";") : QLatin1String("#");
         if (m_arch.startsWith(QLatin1String("armv8"))) {
-            commentSymbol = QLatin1String("\/\/");
+            commentSymbol = QLatin1String("//");
         }
         commentFormat.setForeground(Qt::gray);
         const QString commentPatterns[] = {
