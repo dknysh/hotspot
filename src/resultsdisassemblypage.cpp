@@ -102,7 +102,7 @@ void ResultsDisassemblyPage::showDisassembly()
     QStringList arguments;
     arguments << QLatin1String("-d") << QLatin1String("--start-address") << QLatin1String("0x") + QString::number(m_curSymbol.relAddr, 16) <<
             QLatin1String("--stop-address") << QLatin1String("0x") + QString::number(m_curSymbol.relAddr + m_curSymbol.size, 16) <<
-            m_curSymbol.path;
+            m_curSymbol.actualPath;
 
     showDisassembly(processName, arguments);
 }
