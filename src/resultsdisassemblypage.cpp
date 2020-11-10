@@ -53,17 +53,16 @@
 #include "data.h"
 
 #include <QStandardItemModel>
+#include <KColorScheme>
 
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
         : QWidget(parent)
         , ui(new Ui::ResultsDisassemblyPage)
 {
     ui->setupUi(this);
-    ui->splitter->setStretchFactor(0, 1);
-    ui->splitter->setStretchFactor(1, 1);
-    ui->splitter->setStretchFactor(2, 8);
-
     m_model = new QStandardItemModel();
+    KColorScheme scheme(QPalette::Active);
+    m_foreground = scheme.foreground(KColorScheme::PositiveText).color();
 }
 
 ResultsDisassemblyPage::~ResultsDisassemblyPage() = default;
@@ -76,6 +75,17 @@ void ResultsDisassemblyPage::clear()
     int rowCount = ui->asmView->model()->rowCount();
     if (rowCount > 0) {
         ui->asmView->model()->removeRows(0, rowCount, QModelIndex());
+    }
+}
+
+void ResultsDisassemblyPage::setAsmViewModel(QStandardItemModel* model, int numTypes)
+{
+    ui->asmView->setModel(model);
+    ui->asmView->header()->setStretchLastSection(false);
+    ui->asmView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    for (int event = 0; event < numTypes; event++) {
+        ui->asmView->setColumnWidth(event + 1, 100);
+        ui->asmView->header()->setSectionResizeMode(event + 1, QHeaderView::Interactive);
     }
 }
 
@@ -120,6 +130,9 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
 
         QStringList headerList;
         headerList.append(QLatin1String("Assembly"));
+        for (int i = 0; i < m_callerCalleeResults.selfCosts.numTypes(); i++) {
+            headerList.append(m_callerCalleeResults.selfCosts.typeName(i));
+        }
         m_model->setHorizontalHeaderLabels(headerList);
 
         QTextStream stream(&m_tmpFile);
@@ -127,12 +140,42 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
             QString asmLine = stream.readLine();
             if (asmLine.isEmpty() || asmLine.startsWith(QLatin1String("Disassembly"))) continue;
 
+            QStringList asmTokens = asmLine.split(QLatin1Char(':'));
+            const auto addrLine = asmTokens.value(0).trimmed();
+
             QStandardItem *asmItem = new QStandardItem();
             asmItem->setText(asmLine);
             m_model->setItem(row, 0, asmItem);
+
+            // Calculate event times and add them in red to corresponding columns of the current disassembly row
+            for (int event = 0; event < m_callerCalleeResults.selfCosts.numTypes(); event++) {
+                float costLine = 0;
+                float totalCost = 0;
+                auto& entry = m_callerCalleeResults.entry(m_curSymbol);
+                QHash<quint64, Data::LocationCost>::iterator i = entry.offsetMap.begin();
+                while (i != entry.offsetMap.end()) {
+                    quint64 relAddr = i.key();
+                    Data::LocationCost locationCost = i.value();
+                    float cost = locationCost.selfCost[event];
+                    if (QString::number(relAddr, 16) == addrLine.trimmed()) {
+                        costLine = cost;
+                    }
+                    totalCost += cost;
+                    i++;
+                }
+
+                QString costInstruction = costLine
+                    ? QString::number(costLine * 100 / totalCost, 'f', 2) + QLatin1String("%")
+                    : QString();
+
+                //FIXME QStandardItem stuff should be reimplemented properly
+                QStandardItem* costItem = new QStandardItem(costInstruction);
+                costItem->setForeground(m_foreground);
+                m_model->setItem(row, event + 1, costItem);
+            }
             row++;
         }
-        ui->asmView->setModel(m_model);
+        setAsmViewModel(m_model, m_callerCalleeResults.selfCosts.numTypes());
     }
 }
 
@@ -151,8 +194,14 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
     m_appPath = data.appPath;
     m_extraLibPaths = data.extraLibPaths;
     m_arch = data.arch.trimmed().toLower();
+    m_disasmResult = data;
 
     //TODO: add the ability to configure the arch <-> objdump mapping somehow in the settings
     m_objdump = m_arch.startsWith(QLatin1String("arm")) ? QLatin1String("arm-linux-gnueabi-objdump") : QLatin1String(
             "objdump");
+}
+
+void ResultsDisassemblyPage::setCostsMap(const Data::CallerCalleeResults& callerCalleeResults)
+{
+    m_callerCalleeResults = callerCalleeResults;
 }
