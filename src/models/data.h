@@ -93,6 +93,8 @@ struct DisassemblyResult
     QString extraLibPaths;
     // perf.data path
     QString perfDataPath;
+    // Objdump path
+    QString objdumpPath;
 };
 
 QDebug operator<<(QDebug stream, const Symbol& symbol);

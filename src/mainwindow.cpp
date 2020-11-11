@@ -244,6 +244,12 @@ void MainWindow::setArch(const QString& arch)
     emit archChanged(m_arch);
 }
 
+void MainWindow::setObjdump(const QString& objdump)
+{
+    m_objdump = objdump;
+    emit objdumpChanged(m_objdump);
+}
+
 void MainWindow::onOpenFileButtonClicked()
 {
     const auto fileName = QFileDialog::getOpenFileName(this, tr("Open File"), QDir::currentPath(),
@@ -299,7 +305,7 @@ void MainWindow::openFile(const QString& path, bool isReload)
     m_pageStack->setCurrentWidget(m_startPage);
 
     // TODO: support input files of different types via plugins
-    m_parser->startParseFile(path, m_sysroot, m_kallsyms, m_debugPaths, m_extraLibPaths, m_appPath, m_arch);
+    m_parser->startParseFile(path, m_sysroot, m_kallsyms, m_debugPaths, m_extraLibPaths, m_appPath, m_arch, m_objdump);
     m_reloadAction->setEnabled(true);
     m_reloadAction->setData(path);
 
@@ -401,6 +407,8 @@ void MainWindow::setupPathSettingsMenu()
                   tr("auto-detect"), tr("Path to the kernel symbol mapping."));
     addPathAction(tr("Architecture:"), &MainWindow::setArch, &MainWindow::archChanged,
                   tr("auto-detect"), tr("System architecture, e.g. x86_64, arm, aarch64 etc."));
+    addPathAction(tr("Objdump:"), &MainWindow::setObjdump, &MainWindow::objdumpChanged,
+                  tr("auto-detect"), tr("Path to the objdump."));
     m_startPage->setPathSettingsMenu(menu);
 }
 
