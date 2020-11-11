@@ -1268,7 +1268,7 @@ PerfParser::~PerfParser() = default;
 
 void PerfParser::startParseFile(const QString& path, const QString& sysroot, const QString& kallsyms,
                                 const QString& debugPaths, const QString& extraLibPaths, const QString& appPath,
-                                const QString& arch)
+                                const QString& arch, const QString& objdump)
 {
     Q_ASSERT(!m_isParsing);
 
@@ -1319,7 +1319,7 @@ void PerfParser::startParseFile(const QString& path, const QString& sysroot, con
     m_bottomUpResults = {};
     m_callerCalleeResults = {};
     m_events = {};
-    m_disassemblyResult = {path, appPath, extraLibPaths, arch};
+    m_disassemblyResult = {path, appPath, extraLibPaths, arch, objdump};
 
     emit parsingStarted();
     using namespace ThreadWeaver;

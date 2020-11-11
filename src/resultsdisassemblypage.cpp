@@ -272,7 +272,11 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
     m_appPath = data.appPath;
     m_extraLibPaths = data.extraLibPaths;
     m_arch = data.arch.trimmed().toLower();
+    m_objdump = data.objdumpPath;
     m_disasmResult = data;
+
+    if (!m_objdump.isEmpty())
+        return;
 
     //TODO: add the ability to configure the arch <-> objdump mapping somehow in the settings
     m_objdump = m_arch.startsWith(QLatin1String("arm")) ? QLatin1String("arm-linux-gnueabi-objdump") : QLatin1String(
