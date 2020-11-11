@@ -277,7 +277,11 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
     m_appPath = data.appPath;
     m_extraLibPaths = data.extraLibPaths;
     m_arch = data.arch.trimmed().toLower();
+    m_objdump = data.objdumpPath;
     m_disasmResult = data;
+
+    if (!m_objdump.isEmpty())
+        return;
 
     //TODO: add the ability to configure the arch <-> objdump mapping somehow in the settings
     m_objdump = m_arch.startsWith(tr("arm")) ? tr("arm-linux-gnueabi-objdump") : tr("objdump");
