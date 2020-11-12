@@ -57,13 +57,16 @@ public:
     ~ResultsDisassemblyPage();
 
     void clear();
+    void setAsmViewModel(QStandardItemModel* model, int numTypes);
     void showDisassembly();
     // Output Disassembly that is the result of call process running 'processName' command on tab Disassembly
     void showDisassembly(QString processName, QStringList arguments);
     void setAppPath(const QString& path);
     void setSymbol(const Data::Symbol& data);
     void setData(const Data::DisassemblyResult& data);
-
+    void setCostsMap(const Data::CallerCalleeResults& callerCalleeResults);
+signals:
+    void jumpToCallerCallee(const Data::Symbol& symbol);
 private:
     QScopedPointer<Ui::ResultsDisassemblyPage> ui;
     // Model
@@ -80,4 +83,10 @@ private:
     QString m_arch;
     // Objdump binary name
     QString m_objdump;
+    // Map of symbols
+    Data::DisassemblyResult m_disasmResult;
+    // Map of symbols and its locations with costs
+    Data::CallerCalleeResults m_callerCalleeResults;
+    // Color of costs
+    QColor m_foreground;
 };
