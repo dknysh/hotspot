@@ -215,6 +215,8 @@ QDebug operator<<(QDebug stream, const LocationDefinition& locationDefinition)
 struct Symbol
 {
     StringId name;
+    quint64 relAddr = 0;
+    quint64 size = 0;
     StringId binary;
     StringId path;
     bool isKernel = false;
@@ -222,13 +224,15 @@ struct Symbol
 
 QDataStream& operator>>(QDataStream& stream, Symbol& symbol)
 {
-    return stream >> symbol.name >> symbol.binary >> symbol.path >> symbol.isKernel;
+    return stream >> symbol.name >> symbol.relAddr >> symbol.size >> symbol.binary >> symbol.path >> symbol.isKernel;
 }
 
 QDebug operator<<(QDebug stream, const Symbol& symbol)
 {
     stream.noquote().nospace() << "Symbol{"
                                << "name=" << symbol.name << ", "
+                               << "relAddr=" << symbol.relAddr << ", "
+                               << "size=" << symbol.size << ", "
                                << "binary=" << symbol.binary << ", "
                                << "path=" << symbol.path << ", "
                                << "isKernel=" << symbol.isKernel << "}";
@@ -921,9 +925,11 @@ public:
         Q_ASSERT(bottomUpResult.symbols.size() > symbol.id);
         // TODO: isKernel information
         const auto symbolString = strings.value(symbol.symbol.name.id);
+        const auto relAddr = symbol.symbol.relAddr;
+        const auto size = symbol.symbol.size;
         const auto binaryString = strings.value(symbol.symbol.binary.id);
         const auto pathString = strings.value(symbol.symbol.path.id);
-        bottomUpResult.symbols[symbol.id] = {symbolString, binaryString, pathString};
+        bottomUpResult.symbols[symbol.id] = {symbolString, relAddr, size, binaryString, pathString};
 
         // Count total and missing symbols per module for error report
         auto &numSymbols = numSymbolsByModule[symbol.symbol.binary.id];
@@ -1303,6 +1309,7 @@ void PerfParser::startParseFile(const QString& path, const QString& sysroot, con
     m_bottomUpResults = {};
     m_callerCalleeResults = {};
     m_events = {};
+    m_disassemblyResult = {path, appPath, extraLibPaths, arch};
 
     emit parsingStarted();
     using namespace ThreadWeaver;
@@ -1342,6 +1349,7 @@ void PerfParser::startParseFile(const QString& path, const QString& sysroot, con
                         emit bottomUpDataAvailable(d.bottomUpResult);
                         emit topDownDataAvailable(d.topDownResult);
                         emit summaryDataAvailable(d.summaryResult);
+                        emit disassemblyDataAvailable(m_disassemblyResult);
                         emit callerCalleeDataAvailable(d.callerCalleeResult);
                         emit eventsAvailable(d.eventResult);
                         emit parsingFinished();
