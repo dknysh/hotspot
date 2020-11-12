@@ -57,6 +57,87 @@
 #include <KColorScheme>
 #include <KMessageBox>
 
+class ObjdumpParser : public QObject
+{
+public:
+    explicit ObjdumpParser(QObject *parent = nullptr) : QObject(parent) {}
+
+    ObjdumpParser(QString fileName, QStandardItemModel *model, Data::CallerCalleeResults callerCalleeResults,
+                  QColor foreground)
+    {
+        m_tmpFile.setFileName(fileName);
+        m_model = model;
+        m_callerCalleeResults = callerCalleeResults;
+        m_foreground = foreground;
+    }
+
+    ~ObjdumpParser()
+    {
+    }
+
+    void parseObjdumpOutput(const Data::Symbol &curSymbol)
+    {
+        if (m_tmpFile.open()) {
+            int row = 0;
+            m_model->clear();
+
+            QStringList headerList;
+            headerList.append(tr("Assembly"));
+            for (int i = 0; i < m_callerCalleeResults.selfCosts.numTypes(); i++) {
+                headerList.append(m_callerCalleeResults.selfCosts.typeName(i));
+            }
+            m_model->setHorizontalHeaderLabels(headerList);
+
+            QTextStream stream(&m_tmpFile);
+            while (!stream.atEnd()) {
+                QString asmLine = stream.readLine();
+                if (asmLine.isEmpty() || asmLine.startsWith(tr("Disassembly"))) continue;
+
+                QStringList asmTokens = asmLine.split(QLatin1Char(':'));
+                const auto addrLine = asmTokens.value(0).trimmed();
+
+                QStandardItem *asmItem = new QStandardItem();
+                asmItem->setText(asmLine);
+                m_model->setItem(row, 0, asmItem);
+
+                // Calculate event times and add them in red to corresponding columns of the current disassembly row
+                for (int event = 0; event < m_callerCalleeResults.selfCosts.numTypes(); event++) {
+                    float costLine = 0;
+                    float totalCost = 0;
+                    auto &entry = m_callerCalleeResults.entry(curSymbol);
+                    QHash<quint64, Data::LocationCost>::iterator i = entry.offsetMap.begin();
+                    while (i != entry.offsetMap.end()) {
+                        quint64 relAddr = i.key();
+                        Data::LocationCost locationCost = i.value();
+                        float cost = locationCost.selfCost[event];
+                        if (QString::number(relAddr, 16) == addrLine.trimmed()) {
+                            costLine = cost;
+                        }
+                        totalCost += cost;
+                        i++;
+                    }
+
+                    QString costInstruction = costLine
+                                              ? QString::number(costLine * 100 / totalCost, 'f', 2) + QLatin1String("%")
+                                              : QString();
+
+                    //FIXME QStandardItem stuff should be reimplemented properly
+                    QStandardItem *costItem = new QStandardItem(costInstruction);
+                    costItem->setForeground(m_foreground);
+                    m_model->setItem(row, event + 1, costItem);
+                }
+                row++;
+            }
+        }
+    }
+
+private:
+    QTemporaryFile m_tmpFile;
+    QStandardItemModel *m_model;
+    Data::CallerCalleeResults m_callerCalleeResults;
+    QColor m_foreground;
+};
+
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
         : QWidget(parent)
         , ui(new Ui::ResultsDisassemblyPage)
@@ -175,56 +256,8 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
     }
 
     if (m_tmpFile.open()) {
-        int row = 0;
-        m_model->clear();
-
-        QStringList headerList;
-        headerList.append(tr("Assembly"));
-        for (int i = 0; i < m_callerCalleeResults.selfCosts.numTypes(); i++) {
-            headerList.append(m_callerCalleeResults.selfCosts.typeName(i));
-        }
-        m_model->setHorizontalHeaderLabels(headerList);
-
-        QTextStream stream(&m_tmpFile);
-        while (!stream.atEnd()) {
-            QString asmLine = stream.readLine();
-            if (asmLine.isEmpty() || asmLine.startsWith(tr("Disassembly"))) continue;
-
-            QStringList asmTokens = asmLine.split(QLatin1Char(':'));
-            const auto addrLine = asmTokens.value(0).trimmed();
-
-            QStandardItem *asmItem = new QStandardItem();
-            asmItem->setText(asmLine);
-            m_model->setItem(row, 0, asmItem);
-
-            // Calculate event times and add them in red to corresponding columns of the current disassembly row
-            for (int event = 0; event < m_callerCalleeResults.selfCosts.numTypes(); event++) {
-                float costLine = 0;
-                float totalCost = 0;
-                auto& entry = m_callerCalleeResults.entry(m_curSymbol);
-                QHash<quint64, Data::LocationCost>::iterator i = entry.offsetMap.begin();
-                while (i != entry.offsetMap.end()) {
-                    quint64 relAddr = i.key();
-                    Data::LocationCost locationCost = i.value();
-                    float cost = locationCost.selfCost[event];
-                    if (QString::number(relAddr, 16) == addrLine.trimmed()) {
-                        costLine = cost;
-                    }
-                    totalCost += cost;
-                    i++;
-                }
-
-                QString costInstruction = costLine
-                    ? QString::number(costLine * 100 / totalCost, 'f', 2) + QLatin1String("%")
-                    : QString();
-
-                //FIXME QStandardItem stuff should be reimplemented properly
-                QStandardItem* costItem = new QStandardItem(costInstruction);
-                costItem->setForeground(m_foreground);
-                m_model->setItem(row, event + 1, costItem);
-            }
-            row++;
-        }
+        ObjdumpParser objdumpParser(m_tmpFile.fileName(), m_model, m_callerCalleeResults, m_foreground);
+        objdumpParser.parseObjdumpOutput(m_curSymbol);
         setAsmViewModel(m_model, m_callerCalleeResults.selfCosts.numTypes());
     }
 }
