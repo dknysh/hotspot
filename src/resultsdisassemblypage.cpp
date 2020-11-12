@@ -36,6 +36,7 @@
 #include <QString>
 #include <QListWidgetItem>
 #include <QProcess>
+#include <QObject>
 #include <QDebug>
 #include <QDir>
 #include <QDirIterator>
@@ -54,6 +55,7 @@
 
 #include <QStandardItemModel>
 #include <KColorScheme>
+#include <KMessageBox>
 
 ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, PerfParser *parser, QWidget *parent)
         : QWidget(parent)
@@ -94,7 +96,6 @@ void ResultsDisassemblyPage::showDisassembly()
     // Show empty tab when selected symbol is not valid
     if (m_curSymbol.symbol.isEmpty()) {
         clear();
-        return;
     }
 
     // Call objdump with arguments: addresses range and binary file
@@ -107,6 +108,47 @@ void ResultsDisassemblyPage::showDisassembly()
     showDisassembly(processName, arguments);
 }
 
+static DisassemblyOutput fromProcess(QString processName, QStringList arguments, QString arch, const Data::Symbol &curSymbol)
+{
+    DisassemblyOutput disassemblyOutput;
+    if (curSymbol.symbol.isEmpty()) {
+        disassemblyOutput.errorMessage = QApplication::tr("Empty symbol ?? is selected");
+        return disassemblyOutput;
+    }
+
+    QProcess *asmProcess = new QProcess();
+    asmProcess->start(processName, arguments);
+    QObject::connect(asmProcess, &QProcess::readyRead, [asmProcess, &disassemblyOutput] () {
+        disassemblyOutput.output += asmProcess->readAllStandardOutput();
+    });
+
+    if (!asmProcess->waitForStarted()) {
+        if (!arch.startsWith(QLatin1String("arm"))) {
+            disassemblyOutput.errorMessage = QApplication::tr(
+                    "Process was not started. Probably command 'objdump' not found, but can be installed with 'apt install binutils'");
+        } else {
+            if (arch.startsWith(QLatin1String("armv8")))
+                disassemblyOutput.errorMessage = QApplication::tr(
+                        "Process was not started. Probably command 'aarch64-linux-gnu-objdump' not found, but can be installed with 'apt install binutils-aarch64-linux-gnu'");
+            else
+                disassemblyOutput.errorMessage = QApplication::tr(
+                        "Process was not started. Probably command 'arm-linux-gnueabi-objdump' not found, but can be installed with 'apt install binutils-arm-linux-gnueabi'");
+        }
+        return disassemblyOutput;
+    }
+
+    if (!asmProcess->waitForFinished()) {
+        disassemblyOutput.errorMessage = QApplication::tr("Process was not finished. Stopped by timeout");
+        return disassemblyOutput;
+    }
+
+    if (disassemblyOutput.output.isEmpty()) {
+        disassemblyOutput.errorMessage = QApplication::tr("Empty output of command ").arg(processName);
+    }
+
+    return disassemblyOutput;
+}
+
 void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList arguments)
 {
     //TODO objdump running and parse need to be extracted into a standalone class, covered by unit tests and made async
@@ -114,14 +156,16 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
     QProcess asmProcess;
 
     if (m_tmpFile.open()) {
-        asmProcess.start(processName, arguments);
+        QTextStream stream(&m_tmpFile);
+        DisassemblyOutput disassemblyOutput = fromProcess(processName, arguments, m_arch, m_curSymbol);
+        stream << disassemblyOutput.output;
+        m_tmpFile.close();
 
-        if (!asmProcess.waitForStarted() || !asmProcess.waitForFinished()) {
+        if (!disassemblyOutput) {
+            KMessageBox::detailedSorry(this, tr("Error. Look at the Details for detailed description."), disassemblyOutput.errorMessage);
+            emit jumpToCallerCallee(m_curSymbol);
             return;
         }
-        QTextStream stream(&m_tmpFile);
-        stream << asmProcess.readAllStandardOutput();
-        m_tmpFile.close();
     }
 
     if (m_tmpFile.open()) {
@@ -129,7 +173,7 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
         m_model->clear();
 
         QStringList headerList;
-        headerList.append(QLatin1String("Assembly"));
+        headerList.append(tr("Assembly"));
         for (int i = 0; i < m_callerCalleeResults.selfCosts.numTypes(); i++) {
             headerList.append(m_callerCalleeResults.selfCosts.typeName(i));
         }
@@ -138,7 +182,7 @@ void ResultsDisassemblyPage::showDisassembly(QString processName, QStringList ar
         QTextStream stream(&m_tmpFile);
         while (!stream.atEnd()) {
             QString asmLine = stream.readLine();
-            if (asmLine.isEmpty() || asmLine.startsWith(QLatin1String("Disassembly"))) continue;
+            if (asmLine.isEmpty() || asmLine.startsWith(tr("Disassembly"))) continue;
 
             QStringList asmTokens = asmLine.split(QLatin1Char(':'));
             const auto addrLine = asmTokens.value(0).trimmed();
@@ -202,6 +246,12 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
     if (m_arch.startsWith(tr("armv8")) || m_arch.startsWith(tr("aarch64"))) {
         m_arch = tr("armv8");
         m_objdump = tr("aarch64-linux-gnu-objdump");
+    }
+
+    const auto processPath = QStandardPaths::findExecutable(m_objdump);
+    if (processPath.isEmpty()) {
+        KMessageBox::sorry(this, tr("An appropriate objdump was not found."));
+        emit jumpToCallerCallee(m_curSymbol);
     }
 }
 
