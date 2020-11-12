@@ -198,6 +198,11 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
 
     //TODO: add the ability to configure the arch <-> objdump mapping somehow in the settings
     m_objdump = m_arch.startsWith(tr("arm")) ? tr("arm-linux-gnueabi-objdump") : tr("objdump");
+
+    if (m_arch.startsWith(tr("armv8")) || m_arch.startsWith(tr("aarch64"))) {
+        m_arch = tr("armv8");
+        m_objdump = tr("aarch64-linux-gnu-objdump");
+    }
 }
 
 void ResultsDisassemblyPage::setCostsMap(const Data::CallerCalleeResults& callerCalleeResults)
