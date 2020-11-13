@@ -46,6 +46,7 @@ class ResultsBottomUpPage;
 class ResultsTopDownPage;
 class ResultsFlameGraphPage;
 class ResultsCallerCalleePage;
+class ResultsDisassemblyPage;
 class TimeLineDelegate;
 class TimeAxisHeaderView;
 class FilterAndZoomStack;
@@ -70,6 +71,7 @@ public slots:
     void onOpenEditor(const Data::Symbol& symbol);
     void setTimelineVisible(bool visible);
     void navigateToCodeFailed(const QString& message);
+    void onJumpToDisassembly(const Data::Symbol& symbol);
 
 signals:
     void navigateToCode(const QString& url, int lineNumber, int columnNumber);
@@ -88,6 +90,7 @@ private:
     ResultsTopDownPage* m_resultsTopDownPage;
     ResultsFlameGraphPage* m_resultsFlameGraphPage;
     ResultsCallerCalleePage* m_resultsCallerCalleePage;
+    ResultsDisassemblyPage* m_resultsDisassemblyPage;
     TimeLineDelegate* m_timeLineDelegate;
     TimeAxisHeaderView* m_timeAxisHeaderView;
     QWidget* m_filterBusyIndicator;
