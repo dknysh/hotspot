@@ -70,6 +70,7 @@ ResultsDisassemblyPage::ResultsDisassemblyPage(FilterAndZoomStack *filterStack, 
         , ui(new Ui::ResultsDisassemblyPage)
         , m_model(new QStandardItemModel(this))
         , m_costDelegate(new CostDelegate(CostRole, TotalCostRole, this))
+        , m_objdump(QString())
 {
     ui->setupUi(this);
     ui->asmView->setModel(m_model);
@@ -234,6 +235,9 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
     m_arch = data.arch.trimmed().toLower();
     m_disasmResult = data;
 
+    if (!m_objdump.isEmpty())
+        return;
+
     //TODO: add the ability to configure the arch <-> objdump mapping somehow in the settings
     const auto isArm = m_arch.startsWith(QLatin1String("arm"));
     m_objdump = isArm ? QStringLiteral("arm-linux-gnueabi-objdump") : QStringLiteral("objdump");
@@ -247,6 +251,11 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
 void ResultsDisassemblyPage::setCostsMap(const Data::CallerCalleeResults& callerCalleeResults)
 {
     m_callerCalleeResults = callerCalleeResults;
+}
+
+void ResultsDisassemblyPage::setObjdump(const QString& objdump)
+{
+    m_objdump = objdump;
 }
 
 void ResultsDisassemblyPage::objdumpParse(DisassemblyOutput& disassemblyOutput)

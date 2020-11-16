@@ -82,6 +82,7 @@ public:
     void setSymbol(const Data::Symbol& data);
     void setData(const Data::DisassemblyResult& data);
     void setCostsMap(const Data::CallerCalleeResults& callerCalleeResults);
+    void setObjdump(const QString& objdump);
     void objdumpParse(DisassemblyOutput& disassemblyOutput);
 signals:
     void jumpToCallerCallee(const Data::Symbol& symbol);
