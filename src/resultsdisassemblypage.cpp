@@ -156,12 +156,7 @@ static DisassemblyOutput fromProcess(const QString& processName, const QStringLi
 
 void ResultsDisassemblyPage::showDisassembly(const QString& processName, const QStringList& arguments)
 {
-    //TODO objdump running and parse need to be extracted into a standalone class, covered by unit tests and made async
-    QString processOutput;
-
-    QTextStream stream(&processOutput);
     DisassemblyOutput disassemblyOutput = fromProcess(processName, arguments, m_arch, m_curSymbol);
-    stream << disassemblyOutput.output;
 
     //TODO: that this dialog should be replaced by a passive KMessageWidget instead
     if (!disassemblyOutput) {
@@ -180,21 +175,13 @@ void ResultsDisassemblyPage::showDisassembly(const QString& processName, const Q
     }
     m_model->setHorizontalHeaderLabels(headerList);
 
+    objdumpParse(disassemblyOutput);
+
     int numTypes = m_callerCalleeResults.selfCosts.numTypes();
-    while (!stream.atEnd()) {
-        QString asmLine = stream.readLine();
-        if (asmLine.isEmpty() || asmLine.startsWith(QLatin1String("Disassembly"))) continue;
-
-        QStringList asmTokens = asmLine.split(QLatin1Char(':'));
-        const auto addrLine = asmTokens.value(0).trimmed();
-
-        bool ok = false;
-        QString addrLineRef = addrLine;
-        const auto addr = QStringRef(&addrLineRef).toULongLong(&ok, 16);
-        if (!ok) {
-            qWarning() << "unhandled asm line format:" << addrLine;
-            continue;
-        }
+    for (int row = 0; row < disassemblyOutput.disassemblyLines.size(); row++) {
+        DisassemblyOutput::DisassemblyLine disassemblyLine = disassemblyOutput.disassemblyLines.at(row);
+        QString asmLine = disassemblyLine.disassembly;
+        const auto addr = disassemblyLine.addr;
 
         QStandardItem *asmItem = new QStandardItem();
         asmItem->setText(asmLine);
@@ -230,7 +217,6 @@ void ResultsDisassemblyPage::showDisassembly(const QString& processName, const Q
                 m_model->setItem(row, event + 1, costItem);
             }
         }
-        row++;
     }
     setupAsmViewModel(numTypes);
 }
@@ -261,4 +247,36 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
 void ResultsDisassemblyPage::setCostsMap(const Data::CallerCalleeResults& callerCalleeResults)
 {
     m_callerCalleeResults = callerCalleeResults;
+}
+
+void ResultsDisassemblyPage::objdumpParse(DisassemblyOutput& disassemblyOutput)
+{
+    QString processOutput;
+    QTextStream stream(&processOutput);
+    stream << disassemblyOutput.output;
+
+    QVector<DisassemblyOutput::DisassemblyLine> disassemblyLines;
+
+    int numTypes = m_callerCalleeResults.selfCosts.numTypes();
+    while (!stream.atEnd()) {
+        DisassemblyOutput::DisassemblyLine disassemblyLine;
+        QString asmLine = stream.readLine();
+        if (asmLine.isEmpty() || asmLine.startsWith(QLatin1String("Disassembly"))) continue;
+
+        QStringList asmTokens = asmLine.split(QLatin1Char(':'));
+        const auto addrLine = asmTokens.value(0).trimmed();
+
+        bool ok = false;
+        QString addrLineRef = addrLine;
+        const auto addr = QStringRef(&addrLineRef).toULongLong(&ok, 16);
+        if (!ok) {
+            qWarning() << "unhandled asm line format:" << addrLine;
+            continue;
+        }
+
+        disassemblyLine.addr = addr;
+        disassemblyLine.disassembly = asmLine;
+        disassemblyLines.push_back(disassemblyLine);
+    }
+    disassemblyOutput.disassemblyLines = disassemblyLines;
 }

@@ -56,6 +56,13 @@ struct DisassemblyOutput
     QString errorMessage;
     explicit operator bool() const { return errorMessage.isEmpty(); }
     static DisassemblyOutput fromProcess(const QString &processName, const QStringList &arguments);
+
+    struct DisassemblyLine
+    {
+        quint64 addr = 0;
+        QString disassembly;
+    };
+    QVector<DisassemblyLine> disassemblyLines;
 };
 
 class ResultsDisassemblyPage : public QWidget
@@ -75,6 +82,7 @@ public:
     void setSymbol(const Data::Symbol& data);
     void setData(const Data::DisassemblyResult& data);
     void setCostsMap(const Data::CallerCalleeResults& callerCalleeResults);
+    void objdumpParse(DisassemblyOutput& disassemblyOutput);
 signals:
     void jumpToCallerCallee(const Data::Symbol& symbol);
 private:
@@ -100,3 +108,5 @@ private:
     // Cost delegate
     CostDelegate *m_costDelegate;
 };
+
+Q_DECLARE_TYPEINFO(DisassemblyOutput::DisassemblyLine, Q_MOVABLE_TYPE);
