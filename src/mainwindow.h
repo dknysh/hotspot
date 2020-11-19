@@ -61,6 +61,7 @@ public slots:
     void setExtraLibPaths(const QString& paths);
     void setAppPath(const QString& path);
     void setArch(const QString& arch);
+    void setObjdump(const QString& objdump);
 
     void clear();
     void openFile(const QString& path);
@@ -85,6 +86,7 @@ signals:
     void extraLibPathsChanged(const QString& paths);
     void appPathChanged(const QString& path);
     void archChanged(const QString& arch);
+    void objdumpChanged(const QString& objdump);
 
 private:
     void clear(bool isReload);
@@ -107,6 +109,7 @@ private:
     QString m_extraLibPaths;
     QString m_appPath;
     QString m_arch;
+    QString m_objdump;
     KRecentFilesAction* m_recentFilesAction = nullptr;
     QAction* m_reloadAction = nullptr;
 };
