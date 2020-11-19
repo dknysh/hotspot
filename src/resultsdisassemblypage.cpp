@@ -174,21 +174,15 @@ void ResultsDisassemblyPage::showDisassembly(const QString& processName, const Q
     }
     m_model->setHorizontalHeaderLabels(headerList);
 
+    objdumpParse(disassemblyOutput);
+
     int numTypes = m_callerCalleeResults.selfCosts.numTypes();
-    QByteArrayList asmLineList = disassemblyOutput.output.split('\n');
-    for (int line = 0; line < asmLineList.size(); line++) {
-        QString asmLine = QString::fromStdString(asmLineList.at(line).toStdString());
-        if (asmLine.isEmpty() || asmLine.startsWith(QLatin1String("Disassembly"))) continue;
-
-        const auto asmTokens = asmLine.splitRef(QLatin1Char(':'));
-        const auto addrLine = asmTokens[0].trimmed();
-
-        bool ok = false;
-        const auto addr = QStringRef(addrLine).toULongLong(&ok, 16);
-        if (!ok) {
-            qWarning() << "unhandled asm line format:" << addrLine;
-            continue;
-        }
+    auto &entry = m_callerCalleeResults.entry(m_curSymbol);
+    const auto totalCosts = m_callerCalleeResults.selfCosts.itemCost(entry.id);
+    for (int row = 0; row < disassemblyOutput.disassemblyLines.size(); row++) {
+        DisassemblyOutput::DisassemblyLine disassemblyLine = disassemblyOutput.disassemblyLines.at(row);
+        QString asmLine = disassemblyLine.disassembly;
+        const auto addr = disassemblyLine.addr;
 
         QStandardItem *asmItem = new QStandardItem();
         asmItem->setText(asmLine);
@@ -196,9 +190,6 @@ void ResultsDisassemblyPage::showDisassembly(const QString& processName, const Q
 
         // Calculate event times and add them in red to corresponding columns of the current disassembly row
         float costLine = 0;
-        auto &entry = m_callerCalleeResults.entry(m_curSymbol);
-        const auto totalCosts = m_callerCalleeResults.selfCosts.itemCost(entry.id);
-
         auto it = entry.offsetMap.find(addr);
         if (it != entry.offsetMap.end()) {
             const auto &locationCost = it.value();
@@ -213,7 +204,6 @@ void ResultsDisassemblyPage::showDisassembly(const QString& processName, const Q
                 m_model->setItem(row, event + 1, costItem);
             }
         }
-        row++;
     }
     setupAsmViewModel(numTypes);
 }
@@ -244,4 +234,31 @@ void ResultsDisassemblyPage::setData(const Data::DisassemblyResult &data)
 void ResultsDisassemblyPage::setCostsMap(const Data::CallerCalleeResults& callerCalleeResults)
 {
     m_callerCalleeResults = callerCalleeResults;
+}
+
+void ResultsDisassemblyPage::objdumpParse(DisassemblyOutput& disassemblyOutput)
+{
+    QVector<DisassemblyOutput::DisassemblyLine> disassemblyLines;
+    int numTypes = m_callerCalleeResults.selfCosts.numTypes();
+    QByteArrayList asmLineList = disassemblyOutput.output.split('\n');
+    for (int line = 0; line < asmLineList.size(); line++) {
+        DisassemblyOutput::DisassemblyLine disassemblyLine;
+        QString asmLine = QString::fromStdString(asmLineList.at(line).toStdString());
+        if (asmLine.isEmpty() || asmLine.startsWith(QLatin1String("Disassembly"))) continue;
+
+        const auto asmTokens = asmLine.splitRef(QLatin1Char(':'));
+        const auto addrLine = asmTokens.value(0).trimmed();
+
+        bool ok = false;
+        const auto addr = QStringRef(addrLine).toULongLong(&ok, 16);
+        if (!ok) {
+            qWarning() << "unhandled asm line format:" << addrLine;
+            continue;
+        }
+
+        disassemblyLine.addr = addr;
+        disassemblyLine.disassembly = asmLine;
+        disassemblyLines.push_back(disassemblyLine);
+    }
+    disassemblyOutput.disassemblyLines = disassemblyLines;
 }
