@@ -55,18 +55,10 @@
 #include "models/treemodel.h"
 #include "models/disassemblyoutput.h"
 
-namespace {
-enum CustomRoles
-{
-    CostRole = Qt::UserRole,
-    TotalCostRole = Qt::UserRole + 1,
-};
-}
-
 ResultsDisassemblyPage::ResultsDisassemblyPage(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::ResultsDisassemblyPage)
-    , m_model(new QStandardItemModel(this))
+    , m_model(new DisassemblyModel(this))
     , m_costDelegate(new CostDelegate(CostRole, TotalCostRole, this))
 {
     ui->setupUi(this);
@@ -121,6 +113,7 @@ void ResultsDisassemblyPage::showDisassembly(const DisassemblyOutput& disassembl
     m_model->clear();
 
     const auto& entry = m_callerCalleeResults.entry(m_curSymbol);
+    const auto numTypes = m_callerCalleeResults.selfCosts.numTypes();
 
     ui->symbolLabel->setText(tr("Disassembly for symbol:  %1").arg(Util::formatSymbol(m_curSymbol)));
     // don't set tooltip on symbolLabel, as that will be called internally and then get overwritten
@@ -135,47 +128,9 @@ void ResultsDisassemblyPage::showDisassembly(const DisassemblyOutput& disassembl
 
     ui->errorMessage->hide();
 
-    const auto numTypes = m_callerCalleeResults.selfCosts.numTypes();
+    m_model->setSymbol(m_curSymbol);
+    m_model->setDisassembly(disassemblyOutput.disassemblyLines);
 
-    QStringList headerList;
-    headerList.reserve(numTypes + 1);
-    headerList.append({tr("Assembly")});
-    for (int i = 0; i < numTypes; i++) {
-        headerList.append(m_callerCalleeResults.selfCosts.typeName(i));
-    }
-    m_model->setHorizontalHeaderLabels(headerList);
-
-    for (int row = 0; row < disassemblyOutput.disassemblyLines.size(); row++) {
-        const auto& disassemblyLine = disassemblyOutput.disassemblyLines.at(row);
-
-        auto* asmItem = new QStandardItem(disassemblyLine.disassembly);
-        asmItem->setFlags(asmItem->flags().setFlag(Qt::ItemIsEditable, false));
-        m_model->setItem(row, 0, asmItem);
-
-        // Calculate event times and add them in red to corresponding columns of the current disassembly row
-        auto it = entry.offsetMap.find(disassemblyLine.addr);
-        if (it != entry.offsetMap.end()) {
-            const auto& locationCost = it.value();
-            const auto tooltip = Util::formatTooltip(asmItem->text(), locationCost, m_callerCalleeResults.selfCosts);
-            asmItem->setToolTip(tooltip);
-            for (int event = 0; event < numTypes; event++) {
-                const auto &costLine = locationCost.selfCost[event];
-                const auto totalCost = m_callerCalleeResults.selfCosts.totalCost(event);
-                const auto cost = Util::formatCostRelative(costLine, totalCost, true);
-
-                // FIXME QStandardItem stuff should be reimplemented properly
-                auto* costItem = new QStandardItem(cost);
-                costItem->setFlags(asmItem->flags().setFlag(Qt::ItemIsEditable, false));
-                costItem->setData(costLine, CostRole);
-                costItem->setData(totalCost, TotalCostRole);
-                costItem->setToolTip(tooltip);
-                m_model->setItem(row, event + 1, costItem);
-            }
-        } else {
-            asmItem->setToolTip(
-                tr("<qt><tt>%1</tt><hr/>No samples at this location.</qt>").arg(asmItem->text().toHtmlEscaped()));
-        }
-    }
     setupAsmViewModel(numTypes);
 }
 
@@ -187,6 +142,9 @@ void ResultsDisassemblyPage::setSymbol(const Data::Symbol& symbol)
 void ResultsDisassemblyPage::setCostsMap(const Data::CallerCalleeResults& callerCalleeResults)
 {
     m_callerCalleeResults = callerCalleeResults;
+    m_model->setResults(m_callerCalleeResults);
+    const auto numTypes = m_callerCalleeResults.selfCosts.numTypes();
+    emit m_model->headerDataChanged(Qt::Horizontal, 0 , numTypes + 1);
 }
 
 void ResultsDisassemblyPage::setObjdump(const QString& objdump)
