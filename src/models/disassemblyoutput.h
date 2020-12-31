@@ -26,10 +26,8 @@
 */
 
 #include <QString>
-
-namespace Data {
-    struct Symbol;
-}
+#include <QAbstractTableModel>
+#include "data.h"
 
 struct DisassemblyOutput
 {
@@ -40,6 +38,7 @@ struct DisassemblyOutput
     };
     QVector<DisassemblyLine> disassemblyLines;
 
+    Data::Symbol symbol;
     QString errorMessage;
     explicit operator bool() const
     {
@@ -49,3 +48,39 @@ struct DisassemblyOutput
     static DisassemblyOutput disassemble(const QString& objdump, const QString& arch, const Data::Symbol& symbol);
 };
 Q_DECLARE_TYPEINFO(DisassemblyOutput::DisassemblyLine, Q_MOVABLE_TYPE);
+
+class DisassemblyModel : public QAbstractTableModel
+{
+    Q_OBJECT
+public:
+    explicit DisassemblyModel(QObject *parent = nullptr);
+    ~DisassemblyModel();
+
+    void setDisassembly(const DisassemblyOutput& disassemblyOutput);
+    void setResults(const Data::CallerCalleeResults& results);
+
+    void clear();
+
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
+
+    enum Columns
+    {
+        DisassemblyColumn,
+        COLUMN_COUNT
+    };
+
+    enum CustomRoles
+    {
+        CostRole = Qt::UserRole,
+        TotalCostRole = Qt::UserRole + 1,
+    };
+private:
+    QVector<DisassemblyOutput::DisassemblyLine> m_data;
+    Data::CallerCalleeResults m_results;
+    Data::Symbol m_symbol;
+    int m_numTypes;
+};
